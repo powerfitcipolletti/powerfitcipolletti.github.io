@@ -858,8 +858,8 @@ function vAgenda() {
             <button class="att ${r.asistencia === false ? "no" : ""}" data-a="att" data-id="${esc(r.id)}" data-v="0">Ausente</button>
             <button class="att ${r.pago ? "yes" : ""}" data-a="pago" data-id="${esc(r.id)}">💵 Efectivo</button>
             ${(esPrueba(r) ? r.mail : r.email) ? `<button class="att" data-a="verFicha" data-e="${esc(esPrueba(r) ? r.mail : r.email)}" data-n="${esc(nombreRes(r))}">📋 Ficha</button>` : ""}
-            ${adm ? `<button class="att" data-a="agMover" data-id="${esc(r.id)}">Mover</button>
-            ${esPrueba(r) && !yaEsAlumno(r) ? `<button class="att" data-a="alta" data-id="${esc(r.id)}">Dar de alta</button>` : ""}
+            <button class="att" data-a="agMover" data-id="${esc(r.id)}">Mover</button>
+            ${adm ? `${esPrueba(r) && !yaEsAlumno(r) ? `<button class="att" data-a="alta" data-id="${esc(r.id)}">Dar de alta</button>` : ""}
             <button class="x" data-a="agDel" data-id="${esc(r.id)}" title="Quitar">×</button>` : ""}</div>`; }).join("")}
       </div>`; }).join("")}</div>`}`;
 }
@@ -1046,7 +1046,10 @@ async function agMover(id) {
     if (otro) return modal({title: "No se puede", cancel: "", ok: "Entendido",
       html: `<p>${esc(nombreRes(r))} ya tiene turno ese día a las ${otro.hora}. No se pueden dar dos turnos el mismo día a la misma persona.</p>`});
   }
-  if (await run(() => state.B.cambiar(r, f, h, {admin: true}), "Turno movido")) { await cargarAdmin(); renderAdmin(); }
+  // las profes también mueven turnos (si una alumna adelanta en el gym), pero sin pasarse del cupo del horario
+  const esAdm = state.rol === "admin";
+  if (!esAdm && slotsDelDia(state.cfg, f).indexOf(h) < 0) return toast("Ese horario no está disponible");
+  if (await run(() => state.B.cambiar(r, f, h, {admin: esAdm, cap: state.cfg.capacidad}), "Turno movido")) { await cargarAdmin(); renderAdmin(); }
 }
 function vBloqueos() {
   const futuros = state.bloqueos.filter(b => b.fecha >= hoy()).sort((a, b) => (a.fecha + (a.desde || "")).localeCompare(b.fecha + (b.desde || "")));
