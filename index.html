@@ -366,6 +366,7 @@ async function firebaseBackend() {
   ]);
   const app = initializeApp(FIREBASE_CONFIG);
   const auth = A.getAuth(app);
+  auth.languageCode = "es"; // los mails de Firebase (confirmar cuenta, cambiar contraseña) salen en castellano
   const db = F.getFirestore(app);
   const {doc, getDoc, setDoc, deleteDoc, updateDoc, collection, query, where, getDocs, onSnapshot, runTransaction, Timestamp, serverTimestamp, deleteField, limit} = F;
   let me = null;
@@ -375,7 +376,7 @@ async function firebaseBackend() {
     demo: false,
     init(cb) {
       A.getRedirectResult(auth).catch(e => console.warn(e));
-      A.onAuthStateChanged(auth, u => { me = u ? {email: u.email.toLowerCase(), nombre: u.displayName || "", foto: u.photoURL} : null; cb(me); });
+      A.onAuthStateChanged(auth, u => { me = u && !u.isAnonymous ? {email: (u.email || "").toLowerCase(), nombre: u.displayName || "", foto: u.photoURL, verificado: u.emailVerified} : null; cb(me); });
     },
     async login() {
       const p = new A.GoogleAuthProvider(); p.setCustomParameters({prompt: "select_account"});
@@ -386,6 +387,12 @@ async function firebaseBackend() {
       }
     },
     async logout() { await A.signOut(auth); },
+    // Ingreso con cualquier mail (Hotmail, Yahoo, etc.) y contraseña; la primera vez se confirma el mail con un link
+    async loginMail(email, pass) { await A.signInWithEmailAndPassword(auth, email, pass); },
+    async crearCuenta(email, pass) { const c = await A.createUserWithEmailAndPassword(auth, email, pass); await A.sendEmailVerification(c.user, {url: location.href}); },
+    async recuperar(email) { await A.sendPasswordResetEmail(auth, email, {url: location.href}); },
+    async reenviarVerif() { await A.sendEmailVerification(auth.currentUser, {url: location.href}); },
+    async recargar() { await auth.currentUser.reload(); await auth.currentUser.getIdToken(true); me = {...me, verificado: auth.currentUser.emailVerified}; return me; },
     initPrueba(cb) {
       const off = A.onAuthStateChanged(auth, async u => {
         if (!u) { try { await A.signInAnonymously(auth); } catch (e) { console.error(e); cb(e); } return; }
@@ -509,7 +516,12 @@ async function run(fn, okMsg) {
   catch (e) { console.error(e); toast(traducirError(e)); return false; }
 }
 function traducirError(e) {
-  const m = String(e?.message || e);
+  const m = String(e?.message || e), c = e?.code || "";
+  const AUTH = {"auth/invalid-credential": "Mail o contraseña incorrectos. Si es tu primera vez, tocá «Es mi primera vez».", "auth/wrong-password": "Mail o contraseña incorrectos.",
+    "auth/user-not-found": "No hay una cuenta con ese mail. Si es tu primera vez, tocá «Es mi primera vez».", "auth/email-already-in-use": "Ese mail ya tiene contraseña. Entrá con ella o tocá «Me olvidé la contraseña».",
+    "auth/weak-password": "La contraseña tiene que tener al menos 6 caracteres.", "auth/invalid-email": "Revisá el mail.", "auth/missing-password": "Escribí tu contraseña.",
+    "auth/too-many-requests": "Demasiados intentos. Esperá unos minutos y probá de nuevo.", "auth/network-request-failed": "Sin conexión. Probá de nuevo en un momento."};
+  if (AUTH[c]) return AUTH[c];
   if (/permission|insufficient/i.test(m)) return "No se pudo guardar: no tenés permiso o el turno ya no está disponible.";
   if (/offline|network|unavailable/i.test(m)) return "Sin conexión. Probá de nuevo en un momento.";
   return m;
@@ -548,7 +560,8 @@ function renderLogin() {
     ${RUTA !== "alumnos" ? `<span class="badge prueba" style="font-size:12px;padding:4px 10px">${APP_NOMBRE.toUpperCase()}</span>` : ""}
     <p class="muted">${textos[RUTA]}</p>
     ${state.B.demo ? demoBtn[RUTA] : `
-      <button class="gbtn" data-a="login"><svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Ingresar con Google</button>`}
+      <button class="gbtn" data-a="login"><svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Ingresar con Google</button>
+      ${formMail()}`}
     ${inApp ? `<div class="note small">Si el ingreso no funciona, abrí este link en Chrome o Safari (menú ⋯ → “Abrir en el navegador”).</div>` : ""}
     ${RUTA === "alumnos" ? ayudaWA("Hola! No puedo ingresar a la app de turnos de PowerFit.") : ""}
   </div>`;
@@ -568,6 +581,36 @@ function renderNoAlta() {
     <p class="muted" style="margin:8px 0 14px">Tu cuenta <b>${esc(state.user.email)}</b> todavía no está habilitada para reservar. Escribinos y te damos de alta.</p>
     <a class="btn" style="display:inline-block;text-decoration:none" target="_blank" href="${waLink(WHATSAPP, "Hola! Quiero que habiliten mi cuenta para reservar turnos: " + state.user.email)}">Escribir por WhatsApp</a>
   </div></div>`;
+}
+
+/* ============================ INGRESO CON MAIL Y CONTRASEÑA ============================ */
+function formMail() {
+  const crear = state.mailModo === "crear";
+  return `<div style="width:100%;max-width:340px;text-align:left;margin-top:4px">
+    <p class="small muted center" style="margin:6px 0 2px">o con tu mail (Hotmail, Yahoo, el que uses)</p>
+    <label>Mail</label><input id="mMail" type="email" inputmode="email" autocomplete="email" placeholder="tu@mail.com">
+    <label>${crear ? "Elegí una contraseña (mínimo 6 caracteres)" : "Contraseña"}</label><input id="mPass" type="password" autocomplete="${crear ? "new-password" : "current-password"}">
+    ${crear ? `<label>Repetí la contraseña</label><input id="mPass2" type="password" autocomplete="new-password">` : ""}
+    <button class="btn" style="width:100%;margin-top:12px" data-a="mailEntrar">${crear ? "Crear mi contraseña" : "Entrar"}</button>
+    <p class="center small" style="margin-top:10px">${crear
+      ? `<button class="link" data-a="mailModo" data-m="entrar">Ya tengo contraseña</button>`
+      : `<button class="link" data-a="mailModo" data-m="crear">Es mi primera vez</button> · <button class="link" data-a="mailOlvide">Me olvidé la contraseña</button>`}</p>
+  </div>`;
+}
+function datosMail() {
+  const v = id => (document.getElementById(id)?.value || "");
+  const d = {email: v("mMail").trim().toLowerCase(), pass: v("mPass"), pass2: v("mPass2")};
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) { toast("Revisá el mail"); return null; }
+  if (d.pass.length < 6) { toast("La contraseña tiene que tener al menos 6 caracteres"); return null; }
+  return d;
+}
+function renderVerificar() {
+  $app.innerHTML = `${header(state.user.email)}<div class="wrap"><div class="card center">
+    <div style="font-size:40px">✉️</div><h2 style="transform:none">Confirmá tu mail</h2>
+    <p style="margin:8px 0 14px">Te mandamos un mail a <b>${esc(state.user.email)}</b> con un link. Tocalo y después volvé acá.</p>
+    <p class="small muted">Si no lo ves, fijate en spam o correo no deseado.</p>
+    <div class="row" style="justify-content:center;margin-top:14px"><button class="btn" data-a="verifListo">Ya lo confirmé</button>
+    <button class="btn sec" data-a="verifReenviar">Mandármelo de nuevo</button></div></div></div>`;
 }
 
 /* ============================ CLASE DE PRUEBA (link aparte: …/#prueba) ============================ */
@@ -1089,6 +1132,16 @@ document.addEventListener("click", async e => {
   const a = el.dataset.a, B = state.B;
   switch (a) {
     case "login": run(() => B.login()); break;
+    case "mailModo": state.mailModo = el.dataset.m; renderLogin(); break;
+    case "mailEntrar": { const d = datosMail(); if (!d) break;
+      if (state.mailModo === "crear") { if (d.pass !== d.pass2) { toast("Las contraseñas no coinciden"); break; } await run(() => B.crearCuenta(d.email, d.pass)); }
+      else await run(() => B.loginMail(d.email, d.pass));
+      break; }
+    case "mailOlvide": { const email = (document.getElementById("mMail")?.value || "").trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("Escribí tu mail arriba y volvé a tocar acá"); break; }
+      await run(() => B.recuperar(email), "Te mandamos un mail para crear una contraseña nueva (mirá también en spam)"); break; }
+    case "verifListo": { const u = await B.recargar(); if (u.verificado) alEntrar(u); else toast("Todavía no figura confirmado. Tocá el link del mail y volvé a probar."); break; }
+    case "verifReenviar": await run(() => B.reenviarVerif(), "Te lo mandamos de nuevo (mirá también en spam)"); break;
     case "demoLogin": B.login(el.dataset.k); break;
     case "demoReset": if (await modal({title: "¿Reiniciar la demo?", html: "<p>Se vuelven a cargar los datos de ejemplo.</p>", ok: "Reiniciar"})) { await B.reset(); location.reload(); } break;
     case "logout": state.unsub && state.unsub(); state.unsub = null; state.cambiando = null; await B.logout(); break;
@@ -1163,6 +1216,7 @@ setInterval(() => { if (state.user && RUTA === "alumnos" && state.alumno && !$mo
 async function alEntrar(u) {
   state.user = u;
   if (!u) return renderLogin();
+  if (!state.B.demo && u.verificado === false) return renderVerificar();
   $app.innerHTML = `<div class="login">${LOGO}<p class="muted">Cargando…</p></div>`;
   try {
     state.cfg = await state.B.getConfig();
