@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07090D">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,900&display=swap" rel="stylesheet">
+<title>PowerFit Cipolletti · Turnos</title>
+<style>
+  /* ====== COLORES (cambialos acá) ====== */
+  :root{
+    --bg:#07090D; --card:#0f1520; --card2:#16202f; --line:#233047;
+    --text:#f3f5f9; --muted:#8e9ab0; --accent:#1565FF; --accent2:#2B7BFF; --accent-text:#fff;
+    --ok:#3ddc84; --warn:#ffb020; --bad:#ff5a5f; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.4}
+  body{min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
+  button{font:inherit;cursor:pointer;border:none;border-radius:10px}
+  input,select,textarea{font:inherit;color:var(--text);background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+  textarea{min-height:80px;resize:vertical}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  .wrap{max-width:720px;margin:0 auto;padding:16px}
+  header.top{position:sticky;top:0;z-index:5;background:rgba(13,13,16,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  header.top .wrap{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+  .logo{display:inline-flex;align-items:center;gap:6px;line-height:1}
+  .logo svg{height:1.15em;width:auto;flex:0 0 auto}
+  .logo .w{display:flex;flex-direction:column;align-items:flex-start}
+  .logo .pf{font-weight:900;font-style:italic;font-size:22px;letter-spacing:.01em;transform:scaleX(.76);transform-origin:left center;margin-right:-.24em;white-space:nowrap}
+  .logo .pf span{color:var(--accent2)}
+  .logo .ci{font-size:9px;letter-spacing:.32em;color:var(--muted);font-weight:600;margin-top:3px}
+  .tit{font-weight:900;font-style:italic;text-transform:uppercase;letter-spacing:.01em;display:inline-block;transform:scaleX(.82);transform-origin:left center}
+  .sub{color:var(--muted);font-size:13px}
+  .btn{background:var(--accent);color:var(--accent-text);padding:12px 16px;font-weight:700}
+  .btn.sec{background:var(--card2);color:var(--text);border:1px solid var(--line)}
+  .btn.bad{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+  .btn.sm{padding:7px 11px;font-size:14px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .link{background:none;color:var(--muted);text-decoration:underline;padding:4px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin:10px 0}
+  h2{font-size:22px;margin:20px 0 6px;font-weight:900;font-style:italic;text-transform:uppercase;transform:scaleX(.82);transform-origin:left center;letter-spacing:.01em}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .between{justify-content:space-between}
+  .grow{flex:1}
+  .badge{display:inline-block;font-size:12px;padding:3px 8px;border-radius:99px;background:var(--card2);color:var(--muted);border:1px solid var(--line)}
+  .badge.prueba{color:#fff;background:var(--accent);border-color:var(--accent);font-weight:700;font-size:10px;padding:2px 6px}
+  .badge.ok{color:var(--ok);border-color:var(--ok)} .badge.warn{color:var(--warn);border-color:var(--warn)} .badge.bad{color:var(--bad);border-color:var(--bad)}
+  .days{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+  .days::-webkit-scrollbar{display:none}
+  .day{flex:0 0 auto;min-width:62px;text-align:center;background:var(--card);border:1px solid var(--line);color:var(--text);padding:8px 6px}
+  .day b{display:block;font-size:20px}
+  .day small{color:var(--muted);font-size:12px;text-transform:uppercase}
+  .day.sel{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+  .day.sel small{color:var(--accent-text)}
+  .day.off{opacity:.35}
+  .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+  .slot{background:var(--card);border:1px solid var(--line);color:var(--text);padding:10px 6px;text-align:center}
+  .slot b{display:block;font-size:17px}
+  .slot small{font-size:12px;color:var(--muted)}
+  .slot.full,.slot.blk,.slot.past{opacity:.35}
+  .slot.mine{border-color:var(--accent);color:var(--accent)}
+  .slot.mine small{color:var(--accent)}
+  .note{background:var(--card2);border-left:3px solid var(--warn);padding:10px 12px;border-radius:8px;font-size:14px;margin:8px 0}
+  .note.acc{border-left-color:var(--accent)}
+  .tabs{display:flex;gap:6px;overflow-x:auto;margin:6px 0 4px}
+  .tab{background:var(--card);color:var(--muted);border:1px solid var(--line);padding:9px 14px;flex:0 0 auto}
+  .tab.sel{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:700}
+  .agslot{border-bottom:1px solid var(--line);padding:10px 0}
+  .agslot:last-child{border-bottom:none}
+  .person{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--card2);border-radius:10px;padding:8px 10px;margin-top:6px}
+  .person .name{flex:1 1 100%}
+  .att{padding:6px 10px;font-size:13px;background:var(--card);color:var(--muted);border:1px solid var(--line)}
+  a.att{display:inline-block;border-radius:10px;color:var(--text)}
+  .att.yes{background:var(--ok);color:#111;border-color:var(--ok)}
+  .att.no{background:var(--bad);color:#111;border-color:var(--bad)}
+  .x{background:none;color:var(--muted);font-size:20px;padding:0 6px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .chk{display:flex;align-items:center;gap:8px;margin:12px 0;color:var(--text);font-size:15px}
+  .chk input{width:auto}
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:flex-end;justify-content:center;z-index:50}
+  #modal.on{display:flex}
+  #modal .box{background:var(--card);border:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:90vh;overflow:auto;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+  @media (min-width:600px){#modal{align-items:center} #modal .box{border-radius:18px}}
+  #modal h3{font-size:18px;margin-bottom:8px}
+  #modal .acts{display:flex;gap:8px;margin-top:16px}
+  #modal .acts .btn{flex:1}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:11px 16px;border-radius:12px;font-size:15px;max-width:90%;display:none;z-index:60;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+  #toast.on{display:block}
+  .center{text-align:center}
+  .login{min-height:85vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:14px;padding:24px}
+  .login .logo{font-size:40px}
+  .login .logo .pf{font-size:40px}
+  .login .logo .ci{font-size:12px}
+  .gbtn{display:flex;align-items:center;gap:10px;background:#fff;color:#222;padding:12px 18px;font-weight:600}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+  .empty{color:var(--muted);text-align:center;padding:18px 0}
+  .demo-bar{background:var(--warn);color:#111;text-align:center;font-size:13px;padding:6px;font-weight:600}
+</style>
+</head>
+<body>
+<div id="app"><div class="login"><p class="muted">Cargando…</p></div></div>
+<div id="modal"><div class="box" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script type="module">
+/* =====================================================================
+   CONFIGURACIÓN — completá esto con los datos de tu proyecto de Firebase
+   (ver GUIA.md). Si queda vacío, la app funciona en MODO DEMO.
+   ===================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyA3vWtS0Y2i4o4zxqx-6hMQxt6xl7Jye_k",
+  authDomain: "powerfit-cipolletti.firebaseapp.com",
+  projectId: "powerfit-cipolletti",
+  appId: "1:269114250182:web:e9cbf4f12dd28ef89818c7"
+};
+// Cuentas de Google que entran al panel de administración
+// Quién es dueña lo deciden las reglas de seguridad de Firebase (ahí están los mails de las dueñas).
+// Esta lista solo se usa en el modo demo.
+const ADMINS = ["powerfitcipolletti@gmail.com"];
+const WHATSAPP = "5492996904735"; // 299 690-4735
+// URL del Apps Script (cuenta powerfitcipolletti) que manda el mail de confirmación de la clase de prueba
+const CONFIRMACION_URL = "";
+const GIMNASIO = "PowerFit Cipolletti";
+
+// Valores por defecto (después se cambian desde el panel → Ajustes)
+const DEFAULT_CFG = {
+  capacidad: 2,            // personas por turno
+  intervalo: 30,           // un turno cada X minutos
+  duracion: 20,            // duración de la clase en minutos
+  cancelMin: 60,           // minutos de anticipación para cancelar o cambiar
+  diasAnticipacion: 30,    // cuántos días hacia adelante se puede reservar
+  maxSemana: 3,            // turnos máximos por semana, igual para todos los planes (permite recuperar)
+  maxSeguidos: 2,          // máximo de días seguidos (2 = se permite como excepción, nunca 3)
+  horarios: { // 0=domingo … 6=sábado. Formato "09:00-11:00, 16:00-21:00"
+    "0": "", "1": "09:00-11:00, 16:00-21:00", "2": "09:00-11:00, 16:00-21:00",
+    "3": "09:00-11:00, 16:00-21:00", "4": "09:00-11:00, 16:00-21:00",
+    "5": "09:00-11:00, 16:00-21:00", "6": ""
+  }
+};
+// Planes vigentes (precio por mes). El tope semanal de reservas es igual para todos (ver maxSemana en Ajustes).
+const PLANES = [
+  {id:"1x", nombre:"1 vez por semana", veces:1, cupoMes:4, precio:150000},
+  {id:"2x", nombre:"2 veces por semana", veces:2, cupoMes:8, precio:180000},
+  {id:"3x", nombre:"3 veces por semana", veces:3, cupoMes:12, precio:230000}
+];
+// Formas de pago vigentes (no hay pago mensual). Los descuentos no son acumulables.
+const PAGOS = [
+  {id:"2m", nombre:"Débito cada 2 meses (−15%)", meses:2, desc:15},
+  {id:"3m", nombre:"Débito cada 3 meses (−20%)", meses:3, desc:20},
+  {id:"otro", nombre:"Otro", meses:0, desc:null}
+];
+
+/* ============================ LOGO ============================ */
+const BOLT = `<svg viewBox="0 0 24 32" aria-hidden="true"><path fill="#1565FF" d="M14.5 0 2 18h8l-3 14L22 12h-8.5L17 0z"/></svg>`;
+const LOGO = `<div class="logo">${BOLT}<div class="w"><div class="pf">POWER<span>FIT</span></div><div class="ci">CIPOLLETTI</div></div></div>`;
+
+/* ============================ UTILIDADES ============================ */
+const TZ = "-03:00";
+const pad = n => String(n).padStart(2, "0");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const hoy = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+const addDays = (f, n) => { const d = new Date(f + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const addMonths = (f, n) => { const d = new Date(f + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+const dow = f => new Date(f + "T12:00:00Z").getUTCDay();
+const inicioMs = (f, h) => new Date(`${f}T${h}:00${TZ}`).getTime();
+const slotId = (f, h) => f + "_" + h.replace(":", "");
+const toMin = s => { const [h, m] = s.split(":").map(Number); return h * 60 + (m || 0); };
+const fromMin = m => pad(Math.floor(m / 60)) + ":" + pad(m % 60);
+const DIAS = ["dom","lun","mar","mié","jue","vie","sáb"];
+const DIAS_L = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const fmtCorto = f => `${DIAS[dow(f)]} ${Number(f.slice(8))}/${Number(f.slice(5,7))}`;
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const fmtLargo = f => `${cap(DIAS_L[dow(f)])} ${Number(f.slice(8))} de ${MESES[Number(f.slice(5,7))-1]}`;
+const fmtFecha = f => f ? `${f.slice(8)}/${f.slice(5,7)}/${f.slice(0,4)}` : "—";
+const nombreMes = ym => MESES[Number(ym.slice(5,7)) - 1];
+const diasEntre = (a, b) => Math.round((new Date(b+"T12:00:00Z") - new Date(a+"T12:00:00Z")) / 864e5);
+const planNombre = id => (PLANES.find(p => p.id === id) || {nombre: id || "Sin plan"}).nombre;
+const pagoNombre = id => (PAGOS.find(p => p.id === id) || {nombre: id || "—"}).nombre;
+const vecesSemana = a => (PLANES.find(p => p.id === a?.plan) || {}).veces || 0;
+// Turnos que incluye el plan cada 30 días (cupoMes en PLANES)
+const cupoMes = a => (PLANES.find(p => p.id === a?.plan) || {}).cupoMes || 0;
+const fmtDM = f => `${Number(f.slice(8))}/${Number(f.slice(5,7))}`;
+// Ciclo de 30 días que contiene la fecha f, contando desde el día en que pagó (inicio).
+// Si paga 2 o 3 meses, tiene 2 o 3 ciclos seguidos de 30 días, cada uno con su cupo.
+function cicloDe(a, f) {
+  if (!a?.inicio) { const ym = f.slice(0, 7); return {desde: ym + "-01", hasta: ym + "-31"}; }
+  let n = Math.max(0, Math.floor(diasEntre(a.inicio, f) / 30));
+  // El último ciclo del período pago llega hasta el vencimiento (así no aparece un ciclo extra por 1 o 2 días sueltos)
+  const ciclos = a.vence && a.vence >= a.inicio ? Math.max(1, Math.round((diasEntre(a.inicio, a.vence) + 1) / 30)) : 0;
+  if (ciclos && a.vence >= f) n = Math.min(n, ciclos - 1);
+  const desde = addDays(a.inicio, n * 30);
+  const hasta = ciclos && n === ciclos - 1 && a.vence >= f ? a.vence : addDays(desde, 29);
+  return {desde, hasta};
+}
+const enCiclo = (rs, c) => rs.filter(r => r.fecha >= c.desde && r.fecha <= c.hasta).length;
+const plata = n => "$" + Math.round(n).toLocaleString("es-AR");
+// Total que paga en el período según plan y forma de pago (null si no se puede calcular, ej. Pack Dra.)
+function totalPeriodo(planId, pagoId) {
+  const p = PLANES.find(x => x.id === planId), g = PAGOS.find(x => x.id === pagoId);
+  if (!p || !g || g.desc == null || !g.meses) return null;
+  return p.precio * g.meses * (1 - g.desc / 100);
+}
+// Lunes de la semana de una fecha (las semanas van de lunes a domingo)
+const lunesDe = f => addDays(f, -((dow(f) + 6) % 7));
+// Cuántos días seguidos quedarían si se suma la fecha f a las fechas que ya tiene reservadas
+function rachaCon(fechas, f) {
+  const s = new Set(fechas); s.add(f); let n = 1;
+  for (let d = addDays(f, -1); s.has(d); d = addDays(d, -1)) n++;
+  for (let d = addDays(f, 1); s.has(d); d = addDays(d, 1)) n++;
+  return n;
+}
+const waLink = (tel, txt) => { const t = String(tel||"").replace(/\D/g,""); const n = t.startsWith("54") ? t : "549" + t; return `https://wa.me/${n}?text=${encodeURIComponent(txt||"")}`; };
+
+function slotsDelDia(cfg, f) {
+  const txt = String(cfg.horarios?.[String(dow(f))] || "").trim();
+  if (!txt) return [];
+  const out = new Set();
+  txt.split(",").forEach(r => {
+    const [a, b] = r.split("-").map(s => s && s.trim());
+    if (!a || !b) return;
+    for (let t = toMin(a); t + cfg.duracion <= toMin(b); t += cfg.intervalo) out.add(fromMin(t));
+  });
+  return [...out].sort();
+}
+/* Feriados nacionales (Ley 27.399 y decretos). Feriado = cerrado por defecto; día no laborable = abierto por defecto.
+   Desde el panel se puede abrir o cerrar cada uno. Para sumar fechas nuevas, agregalas a esta lista. */
+const FERIADOS = [
+  {fecha: "2026-11-23", motivo: "Día de la Soberanía Nacional", tipo: "feriado"},
+  {fecha: "2026-12-07", motivo: "Día no laborable con fines turísticos", tipo: "no laborable"},
+  {fecha: "2026-12-08", motivo: "Inmaculada Concepción de María", tipo: "feriado"},
+  {fecha: "2026-12-25", motivo: "Navidad", tipo: "feriado"},
+  {fecha: "2027-01-01", motivo: "Año Nuevo", tipo: "feriado"},
+  {fecha: "2027-02-08", motivo: "Carnaval", tipo: "feriado"},
+  {fecha: "2027-02-09", motivo: "Carnaval", tipo: "feriado"},
+  {fecha: "2027-03-24", motivo: "Día de la Memoria por la Verdad y la Justicia", tipo: "feriado"},
+  {fecha: "2027-03-25", motivo: "Jueves Santo", tipo: "no laborable"},
+  {fecha: "2027-03-26", motivo: "Viernes Santo", tipo: "feriado"},
+  {fecha: "2027-04-02", motivo: "Día del Veterano y de los Caídos en Malvinas", tipo: "feriado"},
+  {fecha: "2027-05-01", motivo: "Día del Trabajador", tipo: "feriado"},
+  {fecha: "2027-05-25", motivo: "Revolución de Mayo", tipo: "feriado"},
+  {fecha: "2027-06-20", motivo: "Paso a la Inmortalidad de Belgrano", tipo: "feriado"},
+  {fecha: "2027-07-09", motivo: "Día de la Independencia", tipo: "feriado"},
+  {fecha: "2027-12-08", motivo: "Inmaculada Concepción de María", tipo: "feriado"},
+  {fecha: "2027-12-25", motivo: "Navidad", tipo: "feriado"}
+];
+const feriadoDe = f => FERIADOS.find(x => x.fecha === f);
+function feriadoCerrado(f) {
+  const fe = feriadoDe(f); if (!fe) return null;
+  const ex = state.cfg?.feriadosEx?.[f];
+  const cerrado = ex === undefined ? fe.tipo === "feriado" : ex === "cerrado";
+  return cerrado ? {id: "feriado_" + f, fecha: f, desde: "", motivo: fe.motivo, feriado: true} : null;
+}
+function bloqueo(f, h) {
+  const fc = feriadoCerrado(f); if (fc) return fc;
+  return state.bloqueos.find(b => b.fecha === f && (!b.desde || h == null || (h >= b.desde && h < b.hasta)));
+}
+function diaBloqueado(f) { return feriadoCerrado(f) || state.bloqueos.find(b => b.fecha === f && !b.desde); }
+const esPrueba = r => r.tipo === "prueba";
+const nuevoIdRes = (old, sid) => esPrueba(old) ? sid + "_prueba_" + old.id.split("_prueba_")[1] : sid + "_" + old.email;
+
+/* ============================ BACKEND DEMO ============================ */
+function demoBackend() {
+  const KEY = "powerfit_demo_v4";
+  let S = null;
+  try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  if (!S) S = seedDemo();
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+  const listeners = new Set();
+  const notify = () => { save(); listeners.forEach(f => f()); };
+  const clone = o => JSON.parse(JSON.stringify(o));
+  let me = null, cb = null;
+  const count = sid => S.reservas.filter(r => r.slot === sid).length;
+  const api = {
+    demo: true,
+    init(c) { cb = c; cb(null); },
+    async login(kind) {
+      me = kind === "admin" ? {email:"powerfitcipolletti@gmail.com", nombre:"PowerFit"}
+         : kind === "profe" ? {email:"juli.demo@gmail.com", nombre:"Juli"} : {email:"sofia.demo@gmail.com", nombre:"Sofía"};
+      cb(me);
+    },
+    async logout() { me = null; cb(null); },
+    async reset() { S = seedDemo(); notify(); },
+    async isAdmin() { return ADMINS.includes(me.email); },
+    async isProfe() { return (S.profes || []).some(p => p.email === me.email); },
+    async listProfes() { return clone(S.profes || []); },
+    async saveProfe(p) { S.profes = (S.profes || []).filter(x => x.email !== p.email); S.profes.push(clone(p)); notify(); },
+    async deleteProfe(email) { S.profes = (S.profes || []).filter(x => x.email !== email); notify(); },
+    async setPago(r, v) { const x = S.reservas.find(y => y.id === r.id); if (x) { if (v == null) delete x.pago; else x.pago = clone(v); } notify(); },
+    async getConfig() { return clone(S.config); },
+    async saveConfig(c) { S.config = clone(c); notify(); },
+    listenTurnos(desde, hasta, fn) {
+      const f = () => { const m = {}; S.reservas.forEach(r => { if (r.fecha >= desde && r.fecha <= hasta) m[r.slot] = (m[r.slot] || 0) + 1; }); fn(m); };
+      listeners.add(f); f(); return () => listeners.delete(f);
+    },
+    async misReservas() { return clone(S.reservas.filter(r => r.email === me.email)); },
+    async reservasRango(d, h) { return clone(S.reservas.filter(r => r.fecha >= d && r.fecha <= h)); },
+    async reservar(email, fecha, hora, o = {}) {
+      const sid = slotId(fecha, hora), id = sid + "_" + email;
+      if (S.reservas.some(r => r.id === id)) throw new Error("Ya tiene ese turno");
+      if (!o.admin && count(sid) >= o.cap) throw new Error("Ese turno se acaba de completar");
+      S.reservas.push({id, slot: sid, fecha, hora, email, inicio: inicioMs(fecha, hora)}); notify();
+    },
+    initPrueba(c) { c(); },
+    async reservarPrueba(d, cap) {
+      const sid = slotId(d.fecha, d.hora);
+      if (count(sid) >= cap) throw new Error("Ese horario se acaba de completar. Elegí otro.");
+      S.reservas.push({id: sid + "_prueba_" + Math.random().toString(36).slice(2, 10), slot: sid, fecha: d.fecha, hora: d.hora, tipo: "prueba",
+        nombre: d.nombre, mail: d.mail || "", telefono: d.telefono, nota: d.nota, inicio: inicioMs(d.fecha, d.hora)}); notify();
+    },
+    async cancelar(r) { S.reservas = S.reservas.filter(x => x.id !== r.id); notify(); },
+    async cambiar(old, fecha, hora, o = {}) {
+      const sid = slotId(fecha, hora);
+      if (!o.admin && count(sid) >= o.cap) throw new Error("Ese turno se acaba de completar");
+      S.reservas = S.reservas.filter(x => x.id !== old.id);
+      const {asistencia, ...resto} = old;
+      S.reservas.push({...resto, id: nuevoIdRes(old, sid), slot: sid, fecha, hora, inicio: inicioMs(fecha, hora)}); notify();
+    },
+    async setAsistencia(r, v) { const x = S.reservas.find(y => y.id === r.id); if (x) { if (v == null) delete x.asistencia; else x.asistencia = v; } notify(); },
+    async getAlumno(email) { const a = S.alumnos.find(a => a.email === email); return a ? clone(a) : null; },
+    async listAlumnos() { return clone(S.alumnos); },
+    async saveAlumno(a) { S.alumnos = S.alumnos.filter(x => x.email !== a.email); S.alumnos.push(clone(a)); notify(); },
+    async deleteAlumno(email) { S.alumnos = S.alumnos.filter(x => x.email !== email); notify(); },
+    async listBloqueos() { return clone(S.bloqueos); },
+    async saveBloqueo(b) { b.id = b.id || b.fecha + "_" + (b.desde || "todo").replace(":", ""); S.bloqueos = S.bloqueos.filter(x => x.id !== b.id); S.bloqueos.push(clone(b)); notify(); },
+    async deleteBloqueo(id) { S.bloqueos = S.bloqueos.filter(x => x.id !== id); notify(); }
+  };
+  return api;
+}
+function seedDemo() {
+  const h = hoy(); const cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+  const habiles = []; for (let i = 0; habiles.length < 6; i++) { const f = addDays(h, i); if (slotsDelDia(cfg, f).length) habiles.push(f); }
+  const al = [
+    {email:"sofia.demo@gmail.com", nombre:"Sofía Demo", telefono:"2995551111", plan:"2x", pago:"2m", inicio:addDays(h,-20), vence:addMonths(addDays(h,-20),2), activo:true, notas:""},
+    {email:"martin.demo@gmail.com", nombre:"Martín López", telefono:"2995552222", plan:"3x", pago:"3m", inicio:addDays(h,-85), vence:addDays(h,5), activo:true, notas:"Molestia en rodilla derecha"},
+    {email:"carla.demo@gmail.com", nombre:"Carla Ruiz", telefono:"2995553333", plan:"2x", pago:"3m", pacienteDra:true, inicio:addDays(h,-10), vence:addMonths(addDays(h,-10),3), activo:true, notas:"Viene de parte de la Dra. González"},
+    {email:"pedro.demo@gmail.com", nombre:"Pedro Gómez", telefono:"2995554444", plan:"1x", pago:"2m", inicio:addDays(h,-70), vence:addDays(h,-8), activo:true, notas:""}
+  ];
+  const mk = (email, f, hr) => ({id: slotId(f,hr) + "_" + email, slot: slotId(f,hr), fecha: f, hora: hr, email, inicio: inicioMs(f,hr)});
+  const res = [
+    mk("martin.demo@gmail.com", habiles[0], "16:30"), mk("carla.demo@gmail.com", habiles[0], "16:30"),
+    mk("sofia.demo@gmail.com", habiles[1], "18:00"), mk("martin.demo@gmail.com", habiles[2], "09:30"),
+    mk("carla.demo@gmail.com", habiles[3], "20:00"), mk("martin.demo@gmail.com", habiles[4], "17:00"),
+    mk("carla.demo@gmail.com", habiles[4], "17:00")
+  ];
+  const pru = (f, hr, nombre, tel, nota, asis) => ({id: slotId(f,hr) + "_prueba_" + nombre.slice(0,3).toLowerCase(), slot: slotId(f,hr), fecha: f, hora: hr,
+    tipo: "prueba", nombre, telefono: tel, nota, inicio: inicioMs(f,hr), ...(asis == null ? {} : {asistencia: asis})});
+  res.push(pru(habiles[1], "19:00", "Lucía Fernández", "2994001122", "Nos conoció por: Instagram"));
+  res.push(pru(addDays(h, -6), "17:30", "Romina Paz", "2995551111", "Nos conoció por: Me lo recomendaron", true));
+  res.push(pru(addDays(h, -4), "10:00", "Diego Sosa", "2994003344", "Nos conoció por: Club Cipolletti", false));
+  return {config: cfg, alumnos: al, reservas: res, bloqueos: [], profes: [{email: "juli.demo@gmail.com", nombre: "Juli"}]};
+}
+
+/* ============================ BACKEND FIREBASE ============================ */
+async function firebaseBackend() {
+  const base = "https://www.gstatic.com/firebasejs/10.12.2/";
+  const [{initializeApp}, A, F] = await Promise.all([
+    import(base + "firebase-app.js"), import(base + "firebase-auth.js"), import(base + "firebase-firestore.js")
+  ]);
+  const app = initializeApp(FIREBASE_CONFIG);
+  const auth = A.getAuth(app);
+  const db = F.getFirestore(app);
+  const {doc, getDoc, setDoc, deleteDoc, updateDoc, collection, query, where, getDocs, onSnapshot, runTransaction, Timestamp, serverTimestamp, deleteField, limit} = F;
+  let me = null;
+  const plain = (id, d) => { const o = {id, ...d}; if (o.inicio?.toMillis) o.inicio = o.inicio.toMillis(); delete o.creado; return o; };
+  const resData = (sid, f, h, email) => ({slot: sid, fecha: f, hora: h, email, inicio: Timestamp.fromMillis(inicioMs(f, h)), creado: serverTimestamp()});
+  return {
+    demo: false,
+    init(cb) {
+      A.getRedirectResult(auth).catch(e => console.warn(e));
+      A.onAuthStateChanged(auth, u => { me = u ? {email: u.email.toLowerCase(), nombre: u.displayName || "", foto: u.photoURL} : null; cb(me); });
+    },
+    async login() {
+      const p = new A.GoogleAuthProvider(); p.setCustomParameters({prompt: "select_account"});
+      try { await A.signInWithPopup(auth, p); }
+      catch (e) {
+        if (["auth/popup-blocked","auth/operation-not-supported-in-this-environment","auth/cancelled-popup-request","auth/web-storage-unsupported"].includes(e.code)) await A.signInWithRedirect(auth, p);
+        else if (e.code !== "auth/popup-closed-by-user") throw e;
+      }
+    },
+    async logout() { await A.signOut(auth); },
+    initPrueba(cb) {
+      const off = A.onAuthStateChanged(auth, async u => {
+        if (!u) { try { await A.signInAnonymously(auth); } catch (e) { console.error(e); cb(e); } return; }
+        off(); cb();
+      });
+    },
+    async reservarPrueba(d, cap) {
+      const sid = slotId(d.fecha, d.hora), tRef = doc(db, "turnos", sid), rRef = doc(db, "reservas", sid + "_prueba_" + auth.currentUser.uid);
+      await runTransaction(db, async tx => {
+        const t = await tx.get(tRef);
+        const n = t.exists() ? (t.data().n || 0) : 0;
+        if (n >= cap) throw new Error("Ese horario se acaba de completar. Elegí otro.");
+        if (t.exists()) tx.update(tRef, {n: n + 1}); else tx.set(tRef, {n: 1, fecha: d.fecha, hora: d.hora});
+        tx.set(rRef, {slot: sid, fecha: d.fecha, hora: d.hora, tipo: "prueba", nombre: d.nombre, mail: d.mail || "", telefono: d.telefono, nota: d.nota,
+          inicio: Timestamp.fromMillis(inicioMs(d.fecha, d.hora)), creado: serverTimestamp()});
+      });
+    },
+    // Solo las dueñas pueden leer la lista de profes: si la lectura funciona, es dueña
+    async isAdmin() { try { await getDocs(query(collection(db, "profes"), limit(1))); return true; } catch (e) { return false; } },
+    async isProfe() { try { return (await getDoc(doc(db, "profes", me.email))).exists(); } catch (e) { return false; } },
+    async listProfes() { return (await getDocs(collection(db, "profes"))).docs.map(d => ({email: d.id, ...d.data()})); },
+    async saveProfe(p) { await setDoc(doc(db, "profes", p.email), {nombre: p.nombre || ""}); },
+    async deleteProfe(email) { await deleteDoc(doc(db, "profes", email)); },
+    async setPago(r, v) { await updateDoc(doc(db, "reservas", r.id), {pago: v == null ? deleteField() : v}); },
+    async getConfig() {
+      const s = await getDoc(doc(db, "config", "general"));
+      const d = s.exists() ? s.data() : {};
+      return {...DEFAULT_CFG, ...d, horarios: {...DEFAULT_CFG.horarios, ...(d.horarios || {})}, _nuevo: !s.exists()};
+    },
+    async saveConfig(c) { await setDoc(doc(db, "config", "general"), c); },
+    listenTurnos(desde, hasta, fn) {
+      const q = query(collection(db, "turnos"), where("fecha", ">=", desde), where("fecha", "<=", hasta));
+      return onSnapshot(q, s => { const m = {}; s.forEach(d => m[d.id] = d.data().n || 0); fn(m); }, e => console.error(e));
+    },
+    async misReservas() {
+      const s = await getDocs(query(collection(db, "reservas"), where("email", "==", me.email)));
+      return s.docs.map(d => plain(d.id, d.data()));
+    },
+    async reservasRango(d, h) {
+      const s = await getDocs(query(collection(db, "reservas"), where("fecha", ">=", d), where("fecha", "<=", h)));
+      return s.docs.map(x => plain(x.id, x.data()));
+    },
+    async reservar(email, f, h, o = {}) {
+      const sid = slotId(f, h), tRef = doc(db, "turnos", sid), rRef = doc(db, "reservas", sid + "_" + email);
+      await runTransaction(db, async tx => {
+        const t = await tx.get(tRef), r = await tx.get(rRef);
+        if (r.exists()) throw new Error("Ya tiene ese turno");
+        const n = t.exists() ? (t.data().n || 0) : 0;
+        if (!o.admin && n >= o.cap) throw new Error("Ese turno se acaba de completar");
+        if (t.exists()) tx.update(tRef, {n: n + 1}); else tx.set(tRef, {n: 1, fecha: f, hora: h});
+        tx.set(rRef, resData(sid, f, h, email));
+      });
+    },
+    async cancelar(r) {
+      const tRef = doc(db, "turnos", r.slot), rRef = doc(db, "reservas", r.id);
+      await runTransaction(db, async tx => {
+        const t = await tx.get(tRef);
+        const n = t.exists() ? (t.data().n || 0) : 0;
+        tx.delete(rRef);
+        if (t.exists()) tx.update(tRef, {n: Math.max(0, n - 1)});
+      });
+    },
+    async cambiar(old, f, h, o = {}) {
+      const sid = slotId(f, h);
+      const oRef = doc(db, "reservas", old.id), otRef = doc(db, "turnos", old.slot);
+      const nRef = doc(db, "reservas", nuevoIdRes(old, sid)), ntRef = doc(db, "turnos", sid);
+      const extra = esPrueba(old) ? {tipo: "prueba", nombre: old.nombre || "", mail: old.mail || "", telefono: old.telefono || "", nota: old.nota || ""} : {};
+      await runTransaction(db, async tx => {
+        const ot = await tx.get(otRef), nt = await tx.get(ntRef), nr = await tx.get(nRef);
+        if (nr.exists()) throw new Error("Ya tiene ese turno");
+        const nn = nt.exists() ? (nt.data().n || 0) : 0;
+        if (!o.admin && nn >= o.cap) throw new Error("Ese turno se acaba de completar");
+        tx.delete(oRef);
+        if (ot.exists()) tx.update(otRef, {n: Math.max(0, (ot.data().n || 0) - 1)});
+        if (nt.exists()) tx.update(ntRef, {n: nn + 1}); else tx.set(ntRef, {n: 1, fecha: f, hora: h});
+        const base = resData(sid, f, h, old.email || "");
+        if (esPrueba(old)) delete base.email;
+        tx.set(nRef, {...base, ...extra});
+      });
+    },
+    async setAsistencia(r, v) { await updateDoc(doc(db, "reservas", r.id), {asistencia: v == null ? deleteField() : v}); },
+    async getAlumno(email) { const s = await getDoc(doc(db, "alumnos", email)); return s.exists() ? s.data() : null; },
+    async listAlumnos() { return (await getDocs(collection(db, "alumnos"))).docs.map(d => d.data()); },
+    async saveAlumno(a) { await setDoc(doc(db, "alumnos", a.email), a); },
+    async deleteAlumno(email) { await deleteDoc(doc(db, "alumnos", email)); },
+    async listBloqueos() { return (await getDocs(collection(db, "bloqueos"))).docs.map(d => ({id: d.id, ...d.data()})); },
+    async saveBloqueo(b) { const id = b.id || b.fecha + "_" + (b.desde || "todo").replace(":", ""); const {id: _, ...data} = b; await setDoc(doc(db, "bloqueos", id), data); },
+    async deleteBloqueo(id) { await deleteDoc(doc(db, "bloqueos", id)); }
+  };
+}
+
+/* ============================ ESTADO Y UI BÁSICA ============================ */
+const state = {
+  B: null, user: null, admin: false, cfg: DEFAULT_CFG, alumno: null, mis: [], turnos: {}, bloqueos: [],
+  diaSel: null, cambiando: null, unsub: null,
+  tab: "agenda", agFecha: hoy(), alumnos: [], pruebas: [], profesList: [], rol: "alumno", resDia: [], resMes: [], filtro: "todos", q: ""
+};
+const $app = document.getElementById("app");
+const $modal = document.getElementById("modal"), $box = document.getElementById("modalBox");
+let toastT;
+function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3600); }
+function modal({title, html = "", ok = "Confirmar", cancel = "Volver", danger = false, onOpen}) {
+  return new Promise(res => {
+    $box.innerHTML = `<h3>${esc(title)}</h3><div>${html}</div><div class="acts">
+      ${cancel ? `<button class="btn sec" data-m="0">${esc(cancel)}</button>` : ""}
+      ${ok ? `<button class="btn ${danger ? "bad" : ""}" data-m="1">${esc(ok)}</button>` : ""}</div>`;
+    $modal.classList.add("on");
+    const close = v => { $modal.classList.remove("on"); $modal.onclick = null; res(v); };
+    $modal.onclick = e => {
+      if (e.target === $modal) return close(false);
+      const b = e.target.closest("[data-m]"); if (!b) return;
+      close(b.dataset.m === "1" ? $box : false);
+    };
+    onOpen && onOpen($box);
+  });
+}
+async function run(fn, okMsg) {
+  try { await fn(); if (okMsg) toast(okMsg); return true; }
+  catch (e) { console.error(e); toast(traducirError(e)); return false; }
+}
+function traducirError(e) {
+  const m = String(e?.message || e);
+  if (/permission|insufficient/i.test(m)) return "No se pudo guardar: no tenés permiso o el turno ya no está disponible.";
+  if (/offline|network|unavailable/i.test(m)) return "Sin conexión. Probá de nuevo en un momento.";
+  return m;
+}
+const demoBar = () => state.B?.demo ? `<div class="demo-bar">MODO DEMO · los datos son de prueba <button class="link" style="color:#111" data-a="demoReset">reiniciar</button></div>` : "";
+function header(sub) {
+  return `${demoBar()}<header class="top"><div class="wrap"><div>${LOGO}<div class="sub" style="margin-top:6px">${esc(sub)}</div></div>
+    <button class="btn sec sm" data-a="logout">Salir</button></div></header>`;
+}
+
+/* ============================ LINKS ============================ */
+// Tres apps, cada una con su link: alumnos (link principal), profes (#profes) y dueñas (#duenas).
+// Aparte, la clase de prueba (#prueba) para quien todavía no es alumno (se comparte desde la landing).
+const H = location.hash;
+const RUTA = (H === "#duenas" || H === "#panel") ? "duenas" : H === "#profes" ? "profes" : H === "#prueba" ? "prueba" : "alumnos";
+const BASE_URL = location.origin + location.pathname;
+const LINKS = {alumnos: BASE_URL, profes: BASE_URL + "#profes", duenas: BASE_URL + "#duenas", prueba: BASE_URL + "#prueba"};
+const APP_NOMBRE = {alumnos: "Alumnos", profes: "Profes", duenas: "Dueñas", prueba: "Clase de prueba"}[RUTA];
+document.title = `PowerFit Cipolletti · ${APP_NOMBRE}`;
+
+/* ============================ LOGIN ============================ */
+function renderLogin() {
+  const inApp = /Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent);
+  const textos = {
+    alumnos: "Reservá, cambiá o cancelá tus turnos",
+    profes: "App de profes · agenda del día, asistencia y pagos en efectivo",
+    duenas: "App de dueñas · acceso solo para Ailo y Flor"
+  };
+  const demoBtn = {
+    alumnos: `<button class="btn" data-a="demoLogin" data-k="alumno">Entrar como alumna (demo)</button>`,
+    profes: `<button class="btn" data-a="demoLogin" data-k="profe">Entrar como profe (demo)</button>`,
+    duenas: `<button class="btn" data-a="demoLogin" data-k="admin">Entrar como dueña (demo)</button>`
+  };
+  $app.innerHTML = `${demoBar()}<div class="login">
+    ${LOGO}
+    ${RUTA !== "alumnos" ? `<span class="badge prueba" style="font-size:12px;padding:4px 10px">${APP_NOMBRE.toUpperCase()}</span>` : ""}
+    <p class="muted">${textos[RUTA]}</p>
+    ${state.B.demo ? demoBtn[RUTA] : `
+      <button class="gbtn" data-a="login"><svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Ingresar con Google</button>`}
+    ${inApp ? `<div class="note small">Si el ingreso no funciona, abrí este link en Chrome o Safari (menú ⋯ → “Abrir en el navegador”).</div>` : ""}
+    ${RUTA === "alumnos" ? ayudaWA("Hola! No puedo ingresar a la app de turnos de PowerFit.") : ""}
+  </div>`;
+}
+// Botón de ayuda por WhatsApp (abre el chat del gimnasio con un mensaje ya escrito)
+const WA_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>`;
+const ayudaWA = txt => `<div class="center" style="margin:22px 0 8px"><p class="small muted" style="margin-bottom:8px">¿Tenés algún problema con la app?</p>
+  <a class="btn" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;background:#25D366;color:#0b1a10" target="_blank" href="${waLink(WHATSAPP, txt)}">${WA_SVG}Escribinos por WhatsApp</a></div>`;
+function renderSinAcceso(msg, linkTxt, link) {
+  $app.innerHTML = `${header(state.user.email)}<div class="wrap"><div class="card center">
+    <p style="margin:6px 0 14px">${msg}</p>
+    ${link ? `<a class="btn" style="display:inline-block;text-decoration:none" href="${link}">${linkTxt}</a>` : ""}</div></div>`;
+}
+function renderNoAlta() {
+  $app.innerHTML = `${header(state.user.email)}<div class="wrap"><div class="card center">
+    <h2>Hola${state.user.nombre ? ", " + esc(state.user.nombre.split(" ")[0]) : ""} 👋</h2>
+    <p class="muted" style="margin:8px 0 14px">Tu cuenta <b>${esc(state.user.email)}</b> todavía no está habilitada para reservar. Escribinos y te damos de alta.</p>
+    <a class="btn" style="display:inline-block;text-decoration:none" target="_blank" href="${waLink(WHATSAPP, "Hola! Quiero que habiliten mi cuenta para reservar turnos: " + state.user.email)}">Escribir por WhatsApp</a>
+  </div></div>`;
+}
+
+/* ============================ CLASE DE PRUEBA (link aparte: …/#prueba) ============================ */
+const PRUEBA_KEY = "pf_prueba";
+const pr = {dia: null, listo: null};
+function pruebaGuardada() { try { const x = JSON.parse(localStorage.getItem(PRUEBA_KEY)); return x && inicioMs(x.fecha, x.hora) > Date.now() ? x : null; } catch (e) { return null; } }
+function renderPrueba() {
+  const cfg = state.cfg, ahora = Date.now(), minAnt = cfg.cancelMin * 60e3;
+  const ya = pr.listo || pruebaGuardada();
+  if (ya) {
+    $app.innerHTML = `${demoBar()}<div class="wrap" style="padding-top:28px"><div class="center">${LOGO}</div>
+      <div class="card center" style="margin-top:22px"><div style="font-size:42px">⚡</div><h2 style="transform:none">¡Te esperamos!</h2>
+      <p style="margin:6px 0 2px"><b>${fmtLargo(ya.fecha)}</b> a las <b>${ya.hora} hs</b></p>
+      <p class="muted">Córdoba 340, Cipolletti</p>
+      <p class="small muted" style="margin-top:12px">Si necesitás cambiar el horario, escribinos por WhatsApp.</p>
+      <a class="btn sec" style="display:inline-block;text-decoration:none;margin-top:12px" target="_blank" href="${waLink(WHATSAPP, `Hola! Reservé mi clase de prueba para el ${fmtLargo(ya.fecha)} a las ${ya.hora}. Soy ${ya.nombre}.`)}">Escribir por WhatsApp</a>
+      </div><p class="center"><button class="link" data-a="prOtra">Reservar para otra persona</button></p></div>`;
+    return;
+  }
+  const dias = diasReservables();
+  const libre = (f, h) => { const n = state.turnos[slotId(f, h)] || 0; return n < cfg.capacidad && !bloqueo(f, h) && inicioMs(f, h) - ahora >= minAnt; };
+  if (!pr.dia || !dias.includes(pr.dia)) pr.dia = dias.find(f => !diaBloqueado(f) && slotsDelDia(cfg, f).some(h => libre(f, h))) || dias[0];
+  const f = pr.dia, slots = slotsDelDia(cfg, f);
+  $app.innerHTML = `${demoBar()}<div class="wrap" style="padding-top:22px"><div class="center">${LOGO}</div>
+    <div class="center" style="margin:18px 0 6px"><h2 style="transform:none;margin:0">Clase de prueba gratis</h2>
+    <p class="muted small" style="margin-top:4px">${cfg.duracion} minutos, con la profe al lado. Elegí el día y el horario que te quede cómodo.</p></div>
+    <div class="days">${dias.map(d => { const off = diaBloqueado(d) || !slotsDelDia(cfg, d).some(h => libre(d, h));
+      return `<button class="day ${d === f ? "sel" : ""} ${off ? "off" : ""}" data-a="prDia" data-f="${d}"><small>${DIAS[dow(d)]}</small><b>${Number(d.slice(8))}</b><small>${MESES[Number(d.slice(5,7))-1].slice(0,3)}</small></button>`; }).join("")}</div>
+    ${diaBloqueado(f) || !slots.length ? `<div class="empty">No hay clases este día</div>` : `<div class="slots">${slots.map(h => {
+      const ok = libre(f, h);
+      return `<button class="slot ${ok ? "" : "full"}" data-a="prSlot" data-f="${f}" data-h="${h}" ${ok ? "" : "disabled"}><b>${h}</b><small>${ok ? "Disponible" : "—"}</small></button>`; }).join("")}</div>`}
+    <p class="small muted center" style="margin-top:20px">📍 Córdoba 340, Cipolletti · ¿Dudas? <a style="color:var(--accent2)" target="_blank" href="${waLink(WHATSAPP, "Hola! Tengo una consulta sobre la clase de prueba")}">Escribinos</a></p></div>`;
+}
+async function prElegir(f, h) {
+  const box = await modal({title: "Tus datos", ok: "Reservar clase", cancel: "Volver",
+    html: `<p class="sub">${fmtLargo(f)} · ${h} hs</p>
+      <label>Nombre y apellido</label><input name="nombre" autocomplete="name">
+      <label>Mail (el mismo que pusiste en tu ficha)</label><input name="mail" type="email" inputmode="email" autocomplete="email" placeholder="nombre@gmail.com">
+      <label>WhatsApp</label><input name="tel" inputmode="tel" autocomplete="tel" placeholder="299 …">
+      <label>¿Cómo nos conociste?</label><select name="como"><option value="">Elegí una opción</option><option>Instagram</option><option>Me lo recomendaron</option><option>Club Cipolletti</option><option>Pasé por el local</option><option>Otro</option></select>
+      <p class="small muted" style="margin-top:10px">Te mandamos la confirmación a tu mail.</p>`});
+  if (!box) return;
+  const g = n => box.querySelector(`[name=${n}]`).value.trim();
+  const d = {fecha: f, hora: h, nombre: g("nombre"), mail: g("mail").toLowerCase(), telefono: g("tel").replace(/[^\d+]/g, ""), nota: g("como") ? "Nos conoció por: " + g("como") : ""};
+  if (d.nombre.length < 2) return toast("Escribí tu nombre");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.mail)) return toast("Revisá tu mail");
+  if (d.telefono.replace(/\D/g, "").length < 8) return toast("Revisá el número de WhatsApp");
+  if (await run(() => state.B.reservarPrueba(d, state.cfg.capacidad))) {
+    pr.listo = d; try { localStorage.setItem(PRUEBA_KEY, JSON.stringify(d)); } catch (e) {}
+    enviarConfirmacion(d);
+    renderPrueba();
+  }
+}
+// Mail de confirmación: lo manda un Apps Script de la cuenta del gimnasio (CONFIRMACION_URL).
+// Si la URL está vacía (todavía no se instaló), la reserva funciona igual, sin mail.
+function enviarConfirmacion(d) {
+  if (!CONFIRMACION_URL || state.B.demo) return;
+  try {
+    fetch(CONFIRMACION_URL, {method: "POST", mode: "no-cors", headers: {"Content-Type": "text/plain"},
+      body: JSON.stringify({tipo: "prueba", nombre: d.nombre, mail: d.mail, fecha: d.fecha, hora: d.hora,
+        fechaTexto: fmtLargo(d.fecha), telefono: d.telefono})});
+  } catch (e) { console.warn(e); }
+}
+function arrancarPrueba() {
+  $app.innerHTML = `<div class="login">${LOGO}<p class="muted">Cargando…</p></div>`;
+  state.B.initPrueba(async err => {
+    if (err) { $app.innerHTML = `<div class="login">${LOGO}<p>No se pudo cargar. Probá de nuevo en un rato.</p></div>`; return; }
+    try {
+      state.cfg = await state.B.getConfig(); delete state.cfg._nuevo;
+      state.bloqueos = await state.B.listBloqueos();
+      const d = diasReservables();
+      state.unsub = state.B.listenTurnos(d[0], d[d.length - 1], m => { state.turnos = m; if (!$modal.classList.contains("on")) renderPrueba(); });
+      renderPrueba();
+    } catch (e) { console.error(e); $app.innerHTML = `<div class="login">${LOGO}<p>No se pudo cargar. Probá de nuevo en un rato.</p></div>`; }
+  });
+}
+
+/* ============================ VISTA ALUMNO ============================ */
+function validarReserva(al, mis, f, h, excluirId) {
+  if (!al) return "No estás dado de alta";
+  if (!al.activo) return "Tu cuenta está pausada. Escribinos por WhatsApp.";
+  if (al.vence && f > al.vence) return `Tu plan vence el ${fmtFecha(al.vence)}. Escribinos para renovarlo.`;
+  if (inicioMs(f, h) <= Date.now()) return "Ese horario ya pasó";
+  const otras = mis.filter(r => r.id !== excluirId);
+  if (otras.some(r => r.fecha === f)) return "Ya tenés un turno ese día";
+  const maxSeg = Number(state.cfg.maxSeguidos) || 1;
+  if (rachaCon(otras.map(r => r.fecha), f) > maxSeg)
+    return maxSeg === 1 ? "No se pueden reservar turnos en días seguidos" : `No se pueden reservar más de ${maxSeg} días seguidos`;
+  const max = Number(state.cfg.maxSemana) || 0;
+  if (max > 0) {
+    const lun = lunesDe(f), usadas = otras.filter(r => lunesDe(r.fecha) === lun).length;
+    if (usadas >= max) return `Podés reservar hasta ${max} turnos por semana y ya tenés ${usadas} esa semana`;
+  }
+  const cupo = cupoMes(al);
+  if (cupo > 0) {
+    const c = cicloDe(al, f), usadasC = enCiclo(otras, c);
+    if (usadasC >= cupo) return `Tu plan incluye ${cupo} turnos cada 30 días y ya tenés ${usadasC} entre el ${fmtDM(c.desde)} y el ${fmtDM(c.hasta)}`;
+  }
+  return null;
+}
+const puedeModificar = r => r.inicio - Date.now() >= state.cfg.cancelMin * 60e3;
+function diasReservables() {
+  const out = []; for (let i = 0; i <= state.cfg.diasAnticipacion; i++) out.push(addDays(hoy(), i)); return out;
+}
+function suscribirTurnos() {
+  state.unsub && state.unsub();
+  const d = diasReservables();
+  state.unsub = state.B.listenTurnos(d[0], d[d.length - 1], m => { state.turnos = m; if (RUTA === "alumnos") renderAlumno(); });
+}
+function renderAlumno() {
+  const al = state.alumno, cfg = state.cfg, ahora = Date.now();
+  const proximos = state.mis.filter(r => r.inicio > ahora).sort((a, b) => a.inicio - b.inicio);
+  const lunHoy = lunesDe(hoy()), usadasSem = state.mis.filter(r => lunesDe(r.fecha) === lunHoy).length, maxSem = Number(cfg.maxSemana) || 0;
+  const cicHoy = cicloDe(al, hoy()), usadasC = enCiclo(state.mis, cicHoy), cupo = cupoMes(al);
+  const dias = diasReservables();
+  if (!state.diaSel || !dias.includes(state.diaSel)) state.diaSel = dias.find(f => slotsDelDia(cfg, f).length && !diaBloqueado(f)) || dias[0];
+  const f = state.diaSel, slots = slotsDelDia(cfg, f);
+  const venceBadge = al.vence ? (() => { const d = diasEntre(hoy(), al.vence);
+    return d < 0 ? `<span class="badge bad">Plan vencido</span>` : d <= 7 ? `<span class="badge warn">Vence en ${d} día${d === 1 ? "" : "s"}</span>` : `<span class="badge ok">Vence ${fmtFecha(al.vence)}</span>`; })() : "";
+  const camb = state.cambiando;
+  const exc = camb?.id;
+  const motivoDia = slots.length ? (() => { const tmp = validarReserva(al, state.mis, f, "23:59", exc); return tmp && !/pasó/.test(tmp) ? tmp : null; })() : null;
+
+  $app.innerHTML = `${header("Mis turnos")}<div class="wrap">
+    <div class="card"><div class="row between"><div><b>Hola, ${esc((al.nombre || state.user.nombre || "").split(" ")[0])}</b>
+      <div class="sub">Plan ${esc(planNombre(al.plan).toLowerCase())}</div>
+      <div class="sub">${cupo ? `Te quedan <b style="color:var(--text)">${Math.max(0, cupo - usadasC)}</b> de ${cupo} turnos hasta el ${fmtDM(cicHoy.hasta)}` : ""}</div></div>${venceBadge}</div></div>
+
+    <h2>Mis próximos turnos</h2>
+    ${proximos.length ? proximos.map(r => {
+      const ok = puedeModificar(r);
+      return `<div class="card"><div class="row between"><div><b>${fmtLargo(r.fecha)}</b><div class="sub">${r.hora} hs · ${cfg.duracion} min</div></div>
+        ${ok ? `<div class="row"><button class="btn sec sm" data-a="cambiar" data-id="${esc(r.id)}">Cambiar</button><button class="btn bad sm" data-a="cancelar" data-id="${esc(r.id)}">Cancelar</button></div>`
+             : `<span class="small muted">Faltan menos de ${cfg.cancelMin >= 60 ? (cfg.cancelMin / 60) + " h" : cfg.cancelMin + " min"}: para cambiarlo escribinos</span>`}
+      </div></div>`; }).join("") : `<div class="empty">No tenés turnos reservados</div>`}
+
+    <h2>${camb ? "Elegí el nuevo horario" : "Reservar turno"}</h2>
+    ${camb ? `<div class="note acc">Vas a reemplazar el turno del <b>${fmtLargo(camb.fecha)} a las ${camb.hora}</b>. <button class="link" data-a="noCambiar">No cambiar</button></div>` : ""}
+    <div class="days">${dias.map(d => { const off = !slotsDelDia(cfg, d).length || diaBloqueado(d);
+      return `<button class="day ${d === f ? "sel" : ""} ${off ? "off" : ""}" data-a="dia" data-f="${d}"><small>${DIAS[dow(d)]}</small><b>${Number(d.slice(8))}</b><small>${MESES[Number(d.slice(5,7))-1].slice(0,3)}</small></button>`; }).join("")}</div>
+    ${diaBloqueado(f) ? `<div class="note">Este día no hay clases${diaBloqueado(f).motivo ? ": " + esc(diaBloqueado(f).motivo) : ""}.</div>` :
+      !slots.length ? `<div class="empty">No hay clases este día</div>` : `
+      ${motivoDia ? `<div class="note">${esc(motivoDia)}</div>` : ""}
+      <div class="slots">${slots.map(h => {
+        const sid = slotId(f, h), n = state.turnos[sid] || 0, libres = cfg.capacidad - n;
+        const mine = state.mis.some(r => r.slot === sid), past = inicioMs(f, h) <= ahora, blk = bloqueo(f, h);
+        const cls = mine ? "mine" : past ? "past" : blk ? "blk" : libres <= 0 ? "full" : "";
+        const txt = mine ? "Tu turno" : past ? "—" : blk ? "No disponible" : libres <= 0 ? "Completo" : `${libres} lugar${libres === 1 ? "" : "es"}`;
+        return `<button class="slot ${cls}" data-a="slot" data-f="${f}" data-h="${h}" ${(past || blk || (libres <= 0 && !mine) || (motivoDia && !mine)) ? "disabled" : ""}><b>${h}</b><small>${txt}</small></button>`;
+      }).join("")}</div>`}
+    <p class="small muted center" style="margin-top:20px">Clases de ${cfg.duracion} min · hasta ${cfg.capacidad} personas · podés cambiar o cancelar hasta ${cfg.cancelMin >= 60 ? (cfg.cancelMin / 60) + " h" : cfg.cancelMin + " min"} antes</p>
+    ${ayudaWA(`Hola! Soy ${al.nombre || state.user.nombre || ""} (${state.user.email}) y tengo un problema con la app de turnos.`)}
+  </div>`;
+}
+async function refrescarMis() { state.mis = await state.B.misReservas(); state.alumno = await state.B.getAlumno(state.user.email) || state.alumno; renderAlumno(); }
+async function clickSlot(f, h) {
+  const sid = slotId(f, h);
+  if (state.mis.some(r => r.slot === sid)) return toast("Ya tenés este turno");
+  const camb = state.cambiando;
+  const err = validarReserva(state.alumno, state.mis, f, h, camb?.id);
+  if (err) return toast(err);
+  const seguido = rachaCon(state.mis.filter(r => r.id !== camb?.id).map(r => r.fecha), f) > 1;
+  const aviso = seguido ? `<div class="note acc" style="margin-top:12px">⚡ <b>Excepción:</b> este turno queda en días seguidos con otro que ya tenés. Lo podés hacer, pero como máximo dos días seguidos; lo ideal es dejar un día de descanso entre clases.</div>` : "";
+  const ok = await modal({
+    title: camb ? "¿Cambiar turno?" : "¿Confirmás el turno?",
+    html: (camb ? `<p>De <b>${fmtLargo(camb.fecha)} ${camb.hora}</b><br>a <b style="color:var(--accent)">${fmtLargo(f)} ${h} hs</b></p>`
+               : `<p><b>${fmtLargo(f)}</b> a las <b>${h} hs</b></p>`) + aviso,
+    ok: camb ? "Cambiar" : "Reservar"
+  });
+  if (!ok) return;
+  const done = await run(() => camb ? state.B.cambiar(camb, f, h, {cap: state.cfg.capacidad}) : state.B.reservar(state.user.email, f, h, {cap: state.cfg.capacidad}),
+    camb ? "¡Listo! Turno cambiado" : "¡Listo! Turno reservado");
+  if (done) state.cambiando = null;
+  await refrescarMis();
+}
+
+/* ============================ PANEL ADMIN ============================ */
+async function cargarAdmin() {
+  const ym = state.agFecha.slice(0, 7);
+  const [al, dia, mes, bl, pru] = await Promise.all([
+    state.B.listAlumnos(), state.B.reservasRango(state.agFecha, state.agFecha),
+    state.B.reservasRango(ym + "-01", ym + "-31"), state.B.listBloqueos(),
+    state.B.reservasRango(addDays(hoy(), -45), addDays(hoy(), 60))
+  ]);
+  state.resRango = pru; // todas las reservas de -45 a +60 días (para contar cupos)
+  state.pruebas = pru.filter(esPrueba).sort((a, b) => a.inicio - b.inicio);
+  state.alumnos = al.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+  state.resDia = dia; state.resMes = mes; state.bloqueos = bl;
+  if (state.rol === "admin") state.profesList = await state.B.listProfes();
+}
+const alumnoDe = email => state.alumnos.find(a => a.email === email);
+const nombreDe = email => alumnoDe(email)?.nombre || email;
+const nombreRes = r => esPrueba(r) ? (r.nombre || "Clase de prueba") : nombreDe(r.email);
+const telRes = r => esPrueba(r) ? r.telefono : alumnoDe(r.email)?.telefono;
+const digitos = t => String(t || "").replace(/\D/g, "").slice(-8);
+const yaEsAlumno = r => r.telefono && state.alumnos.some(a => digitos(a.telefono) && digitos(a.telefono) === digitos(r.telefono));
+function renderAdmin() {
+  const esAdm = state.rol === "admin";
+  if (!esAdm) state.tab = "agenda";
+  const tabs = [["agenda","Agenda"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
+  const body = {agenda: vAgenda, pruebas: vPruebas, alumnos: vAlumnos, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
+  $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
+    ${!esAdm ? "" : `<div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${state.tab === k ? "sel" : ""}" data-a="tab" data-t="${k}">${l}</button>`).join("")}</div>`}
+    ${body}</div>`;
+  if (state.tab === "alumnos") { const q = document.getElementById("q"); if (q && state._focusQ) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+}
+function vAgenda() {
+  const f = state.agFecha, cfg = state.cfg;
+  const porSlot = {};
+  state.resDia.forEach(r => (porSlot[r.hora] = porSlot[r.hora] || []).push(r));
+  const horas = [...new Set([...slotsDelDia(cfg, f), ...Object.keys(porSlot)])].sort();
+  const total = state.resDia.length, dB = diaBloqueado(f), adm = state.rol === "admin";
+  const efDia = state.resDia.reduce((t, r) => t + (Number(r.pago?.monto) || 0), 0);
+  const efMes = state.resMes.reduce((t, r) => t + (Number(r.pago?.monto) || 0), 0);
+  const pres = state.resDia.filter(r => r.asistencia === true).length, aus = state.resDia.filter(r => r.asistencia === false).length;
+  return `<div class="card"><div class="row between">
+      <button class="btn sec sm" data-a="agMove" data-d="-1">‹</button>
+      <div class="center grow"><b>${fmtLargo(f)}</b><div class="sub">${total} turno${total === 1 ? "" : "s"} reservado${total === 1 ? "" : "s"}${f === hoy() ? " · hoy" : ""}</div></div>
+      <button class="btn sec sm" data-a="agMove" data-d="1">›</button></div>
+    <div class="row" style="margin-top:10px"><input type="date" id="agDate" value="${f}" class="grow" style="width:auto">
+      <button class="btn sec sm" data-a="agHoy">Hoy</button><button class="btn sec sm" data-a="refresh">↻</button></div>
+    <div class="row small muted" style="margin-top:10px;gap:14px"><span>✅ ${pres} presentes</span><span>❌ ${aus} ausentes</span><span>💵 ${plata(efDia)} efectivo hoy</span>${adm ? `<span>· ${plata(efMes)} en ${nombreMes(f.slice(0,7))}</span>` : ""}</div></div>
+    ${dB ? `<div class="note">${dB.feriado ? "Feriado" : "Día bloqueado"}${dB.motivo ? ": " + esc(dB.motivo) : ""}. Nadie puede reservar.${adm ? (dB.feriado ? ` <button class="link" data-a="feriado" data-f="${f}" data-v="abierto">Abrir igual</button>` : ` <button class="link" data-a="delBloq" data-id="${esc(dB.id)}">Desbloquear</button>`) : ""}</div>`
+      : feriadoDe(f) ? `<div class="note acc">${esc(feriadoDe(f).motivo)} (${feriadoDe(f).tipo}): el gimnasio está abierto.${adm ? ` <button class="link" data-a="feriado" data-f="${f}" data-v="cerrado">Cerrar este día</button>` : ""}</div>` : ""}
+    ${!horas.length ? `<div class="empty">No hay horarios configurados este día</div>` : `<div class="card">${horas.map(h => {
+      const rs = porSlot[h] || [], blk = bloqueo(f, h), fuera = !slotsDelDia(cfg, f).includes(h);
+      return `<div class="agslot"><div class="row between"><div><b>${h}</b> <span class="sub">${rs.length}/${cfg.capacidad}</span>
+          ${blk ? `<span class="badge warn">bloqueado</span>` : ""}${fuera ? `<span class="badge">fuera de horario</span>` : ""}</div>
+        <div class="row">${!blk && adm ? `<button class="btn sec sm" data-a="agAdd" data-h="${h}">+ Agregar</button>` : ""}</div></div>
+        ${rs.map(r => { const a = esPrueba(r) ? null : alumnoDe(r.email);
+          return `<div class="person"><span class="name">${esc(nombreRes(r))}${esPrueba(r) ? ` <span class="badge prueba">PRUEBA</span>` : ""}${r.pago ? ` <span class="badge ok">💵 ${plata(r.pago.monto)}</span>` : ""}
+              ${a?.notas ? `<div class="small" style="color:var(--warn);margin-top:2px">⚠️ ${esc(a.notas)}</div>` : ""}</span>
+            ${esPrueba(r) && r.telefono && adm ? `<a class="att" style="text-decoration:none" target="_blank" href="${waLink(r.telefono, `Hola ${esc((r.nombre||"").split(" ")[0])}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`)}">WhatsApp</a>` : ""}
+            <button class="att ${r.asistencia === true ? "yes" : ""}" data-a="att" data-id="${esc(r.id)}" data-v="1">Presente</button>
+            <button class="att ${r.asistencia === false ? "no" : ""}" data-a="att" data-id="${esc(r.id)}" data-v="0">Ausente</button>
+            <button class="att ${r.pago ? "yes" : ""}" data-a="pago" data-id="${esc(r.id)}">💵 Efectivo</button>
+            ${adm ? `<button class="att" data-a="agMover" data-id="${esc(r.id)}">Mover</button>
+            ${esPrueba(r) && !yaEsAlumno(r) ? `<button class="att" data-a="alta" data-id="${esc(r.id)}">Dar de alta</button>` : ""}
+            <button class="x" data-a="agDel" data-id="${esc(r.id)}" title="Quitar">×</button>` : ""}</div>`; }).join("")}
+      </div>`; }).join("")}</div>`}`;
+}
+const CONCEPTOS = ["Pago 2 meses", "Pago 3 meses", "Otro"];
+async function registrarPago(id) {
+  const r = state.resDia.find(x => x.id === id); if (!r) return;
+  const p = r.pago || {};
+  let quitar = false;
+  const box = await modal({title: "Pago en efectivo", ok: "Guardar", cancel: "Volver",
+    html: `<p><b>${esc(nombreRes(r))}</b> · ${fmtCorto(r.fecha)} ${r.hora}</p>
+      <label>Monto ($)</label><input name="monto" type="number" inputmode="numeric" min="0" value="${esc(p.monto ?? "")}" placeholder="Ej: 15000">
+      <label>Concepto</label><select name="concepto">${CONCEPTOS.map(c => `<option ${p.concepto === c ? "selected" : ""}>${c}</option>`).join("")}</select>
+      <label>Nota (opcional)</label><input name="nota" value="${esc(p.nota || "")}">
+      ${r.pago ? `<p class="small muted" style="margin-top:8px">Cargado por ${esc(nombreEquipo(p.por))}</p><button class="btn bad sm" style="margin-top:10px" data-quitar="1">Quitar pago</button>` : ""}`,
+    onOpen: b => { const q = b.querySelector("[data-quitar]"); if (q) q.onclick = ev => { ev.preventDefault(); quitar = true; b.querySelector('[data-m="1"]').click(); }; }});
+  if (!box) return;
+  let v = null;
+  if (!quitar) {
+    const monto = Number(box.querySelector("[name=monto]").value);
+    if (!(monto > 0)) return toast("Poné el monto");
+    v = {monto, concepto: box.querySelector("[name=concepto]").value, nota: box.querySelector("[name=nota]").value.trim(), por: state.user.email, cuando: Date.now()};
+  }
+  if (await run(() => state.B.setPago(r, v), quitar ? "Pago quitado" : "Pago registrado")) { await cargarAdmin(); renderAdmin(); }
+}
+const nombreEquipo = email => (state.profesList || []).find(p => p.email === email)?.nombre || email;
+function vPruebas() {
+  const ahora = Date.now();
+  const prox = state.pruebas.filter(r => r.inicio > ahora - 30 * 60e3);
+  const pas = state.pruebas.filter(r => r.inicio <= ahora - 30 * 60e3).reverse();
+  const conv = pas.filter(yaEsAlumno).length, vinieron = pas.filter(r => r.asistencia === true).length;
+  const card = r => `<div class="card"><div class="row between"><div><b>${esc(r.nombre)}</b>
+      <div class="sub">${fmtLargo(r.fecha)} · ${r.hora} hs</div>${r.mail ? `<div class="small muted">${esc(r.mail)}</div>` : ""}${r.nota ? `<div class="small muted">${esc(r.nota)}</div>` : ""}</div>
+      ${yaEsAlumno(r) ? `<span class="badge ok">Ya es alumno</span>` : r.asistencia === true ? `<span class="badge ok">Presente</span>` : r.asistencia === false ? `<span class="badge bad">Ausente</span>` : ""}</div>
+    <div class="row" style="margin-top:8px">
+      ${r.telefono ? `<a class="att" style="text-decoration:none" target="_blank" href="${waLink(r.telefono, `Hola ${esc((r.nombre||"").split(" ")[0])}! Te escribimos de PowerFit por tu clase de prueba.`)}">WhatsApp ${esc(r.telefono)}</a>` : ""}
+      <button class="att" data-a="agMover" data-id="${esc(r.id)}">Mover</button>
+      ${!yaEsAlumno(r) ? `<button class="att" data-a="alta" data-id="${esc(r.id)}">Dar de alta</button>` : ""}
+      <button class="att" data-a="verDia" data-f="${r.fecha}">Ver en agenda</button></div></div>`;
+  return `<div class="note acc small">Link para clases de prueba: <b>${esc(location.origin + location.pathname)}#prueba</b><br>
+      <button class="btn sec sm" style="margin-top:8px" data-a="copiarLink">Copiar link</button></div>
+    <h2>Próximas</h2>${prox.length ? prox.map(card).join("") : `<div class="empty">No hay clases de prueba reservadas</div>`}
+    <h2>Últimos 45 días</h2>${pas.length ? `<p class="sub" style="margin-bottom:6px">${pas.length} clases de prueba · vinieron ${vinieron} · se dieron de alta ${conv}</p>` + pas.map(card).join("") : `<div class="empty">Todavía no hay historial</div>`}`;
+}
+function statsAlumno(email) {
+  const ym = state.agFecha.slice(0, 7);
+  const rs = state.resMes.filter(r => r.email === email && r.fecha.slice(0, 7) === ym);
+  return {usadas: rs.length, vino: rs.filter(r => r.asistencia === true).length, falto: rs.filter(r => r.asistencia === false).length};
+}
+function estadoVence(a) {
+  if (!a.activo) return {k: "inactivo", html: `<span class="badge">Inactivo</span>`};
+  if (!a.vence) return {k: "ok", html: ""};
+  const d = diasEntre(hoy(), a.vence);
+  if (d < 0) return {k: "vencido", html: `<span class="badge bad">Vencido ${fmtFecha(a.vence)}</span>`};
+  if (d <= 7) return {k: "pronto", html: `<span class="badge warn">Vence en ${d} d</span>`};
+  return {k: "ok", html: `<span class="badge ok">Vence ${fmtFecha(a.vence)}</span>`};
+}
+function vAlumnos() {
+  const q = state.q.trim().toLowerCase();
+  const list = state.alumnos.filter(a => {
+    const e = estadoVence(a).k;
+    if (state.filtro === "pronto" && e !== "pronto") return false;
+    if (state.filtro === "vencido" && e !== "vencido") return false;
+    if (state.filtro === "inactivo" && e !== "inactivo") return false;
+    return !q || (a.nombre || "").toLowerCase().includes(q) || a.email.includes(q) || String(a.telefono || "").includes(q);
+  });
+  const cnt = k => state.alumnos.filter(a => estadoVence(a).k === k).length;
+  const ym = state.agFecha.slice(0, 7);
+  return `<div class="row"><input id="q" placeholder="Buscar por nombre, mail o teléfono" value="${esc(state.q)}" class="grow" style="width:auto">
+      <button class="btn sm" data-a="alNuevo">+ Nuevo</button></div>
+    <div class="tabs">${[["todos","Todos (" + state.alumnos.length + ")"],["pronto","Vencen pronto (" + cnt("pronto") + ")"],["vencido","Vencidos (" + cnt("vencido") + ")"],["inactivo","Inactivos (" + cnt("inactivo") + ")"]]
+      .map(([k, l]) => `<button class="tab ${state.filtro === k ? "sel" : ""}" data-a="filtro" data-k="${k}">${l}</button>`).join("")}</div>
+    ${list.length ? list.map(a => { const s = statsAlumno(a.email), e = estadoVence(a);
+      return `<div class="card" data-a="alEdit" data-e="${esc(a.email)}" style="cursor:pointer"><div class="row between"><b>${esc(a.nombre || a.email)}</b>${e.html}</div>
+        <div class="sub">${esc(planNombre(a.plan))} · ${esc(pagoNombre(a.pago))}${a.socioClub ? " · Socio Club Cipolletti" : ""}${a.pacienteDra ? " · Paciente Dra. González" : ""}</div>
+        <div class="sub">${esc(a.email)}</div>
+        ${cupoMes(a) && a.activo !== false ? (() => { const c = cicloDe(a, hoy()); return `<div class="sub">Cupo del ${fmtDM(c.desde)} al ${fmtDM(c.hasta)}: ${enCiclo((state.resRango || []).filter(r => r.email === a.email), c)} de ${cupoMes(a)} turnos</div>`; })() : ""}
+        <div class="sub">${nombreMes(ym)}: ${s.usadas} turnos · presente ${s.vino} · ausente ${s.falto}</div>
+        ${a.notas ? `<div class="small" style="margin-top:4px">⚠️ ${esc(a.notas)}</div>` : ""}</div>`; }).join("") : `<div class="empty">No hay alumnos para mostrar</div>`}`;
+}
+function formAlumno(a = {}) {
+  const nuevo = !a.email || !alumnoDe(a.email);
+  return `<label>Nombre y apellido</label><input name="nombre" value="${esc(a.nombre)}">
+    <label>Mail de Google (con el que va a ingresar)</label><input name="email" type="email" value="${esc(a.email)}" ${nuevo ? "" : "readonly style='opacity:.6'"} placeholder="nombre@gmail.com">
+    <label>Teléfono (WhatsApp)</label><input name="telefono" inputmode="tel" value="${esc(a.telefono)}" placeholder="299…">
+    <label>Plan</label><select name="plan">${PLANES.map(p => `<option value="${p.id}" ${(a.plan || "2x") === p.id ? "selected" : ""}>${p.nombre} · ${plata(p.precio)}/mes</option>`).join("")}</select>
+    <label>Forma de pago</label><select name="pago">${PAGOS.map(p => `<option value="${p.id}" ${(a.pago || "2m") === p.id ? "selected" : ""}>${p.nombre}</option>`).join("")}</select>
+    <div class="grid2"><div><label>Inicio</label><input name="inicio" type="date" value="${esc(a.inicio || hoy())}"></div>
+      <div><label>Vence</label><input name="vence" type="date" value="${esc(a.vence)}"></div></div>
+    <p class="sub" id="totPlan" style="margin-top:8px"></p>
+    <label class="chk"><input type="checkbox" name="socioClub" ${a.socioClub ? "checked" : ""}> Socio del Club Cipolletti (10% en el primer mes, con carnet)</label>
+    <label class="chk"><input type="checkbox" name="pacienteDra" ${a.pacienteDra ? "checked" : ""}> Paciente de la Dra. González (10% en el primer mes)</label>
+    <p class="small muted" style="margin-top:-6px">Los beneficios no se acumulan: se marca uno solo.</p>
+    <label class="chk"><input type="checkbox" name="activo" ${a.activo !== false ? "checked" : ""}> Activo (puede reservar)</label>
+    <label>Notas / contraindicaciones</label><textarea name="notas">${esc(a.notas)}</textarea>
+    ${!nuevo ? `<button class="btn bad sm" style="margin-top:12px" data-del="1">Eliminar alumno</button>` : ""}`;
+}
+async function editarAlumno(email, prefill) {
+  const a = email ? alumnoDe(email) : null;
+  const box = await modal({title: a ? "Editar alumno" : "Nuevo alumno", html: formAlumno(a || prefill || {}), ok: "Guardar", cancel: "Cancelar",
+    onOpen: b => {
+      const plan = b.querySelector("[name=plan]"), pago = b.querySelector("[name=pago]"), ini = b.querySelector("[name=inicio]"), ven = b.querySelector("[name=vence]"), tot = b.querySelector("#totPlan");
+      const total = () => { const t = totalPeriodo(plan.value, pago.value), g = PAGOS.find(x => x.id === pago.value);
+        tot.textContent = t != null ? `Paga ${plata(t)} cada ${g.meses} meses (${plata(t / g.meses)} por mes)` : ""; };
+      const calc = () => { const g = PAGOS.find(x => x.id === pago.value); if (g?.meses && ini.value) ven.value = addMonths(ini.value, g.meses); total(); };
+      pago.onchange = calc; ini.onchange = calc; plan.onchange = total;
+      const club = b.querySelector("[name=socioClub]"), dra = b.querySelector("[name=pacienteDra]");
+      club.onchange = () => { if (club.checked) dra.checked = false; };
+      dra.onchange = () => { if (dra.checked) club.checked = false; };
+      if (!ven.value) calc(); else total();
+      const del = b.querySelector("[data-del]");
+      if (del) del.onclick = async ev => { ev.preventDefault(); $modal.classList.remove("on");
+        const ok = await modal({title: "¿Eliminar alumno?", html: `<p>Se borra la ficha de <b>${esc(a.nombre || a.email)}</b>. Sus turnos ya reservados no se borran.</p>`, ok: "Eliminar", danger: true});
+        if (ok && await run(() => state.B.deleteAlumno(a.email), "Alumno eliminado")) { await cargarAdmin(); renderAdmin(); } };
+    }});
+  if (!box) return;
+  const g = n => box.querySelector(`[name=${n}]`);
+  const nuevo = {
+    nombre: g("nombre").value.trim(), email: g("email").value.trim().toLowerCase(), telefono: g("telefono").value.trim(),
+    plan: g("plan").value, pago: g("pago").value, inicio: g("inicio").value, vence: g("vence").value,
+    socioClub: g("socioClub").checked, pacienteDra: g("pacienteDra").checked, activo: g("activo").checked, notas: g("notas").value.trim()
+  };
+  if (!nuevo.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(nuevo.email)) return toast("Falta un mail válido");
+  if (!a && alumnoDe(nuevo.email)) return toast("Ya existe un alumno con ese mail");
+  if (await run(() => state.B.saveAlumno(nuevo), "Guardado")) { await cargarAdmin(); renderAdmin(); }
+}
+async function agAgregar(h) {
+  const f = state.agFecha;
+  const ya = state.resDia.filter(r => r.hora === h).map(r => r.email);
+  const opts = state.alumnos.filter(a => a.activo !== false && !ya.includes(a.email));
+  if (!opts.length) return toast("No hay alumnos activos para agregar");
+  const box = await modal({title: `Agregar a las ${h}`, html: `<p class="sub">${fmtLargo(f)}</p>
+    <label>Alumno</label><select name="al">${opts.map(a => `<option value="${esc(a.email)}">${esc(a.nombre || a.email)}</option>`).join("")}</select>`, ok: "Agregar"});
+  if (!box) return;
+  const email = box.querySelector("[name=al]").value;
+  const avisos = [];
+  if (ya.length >= state.cfg.capacidad) avisos.push(`El turno ya tiene ${ya.length}/${state.cfg.capacidad} personas`);
+  const mis = (await state.B.reservasRango(addDays(f, -1), addDays(f, 1))).filter(r => r.email === email);
+  const mismoDia = mis.find(r => r.fecha === f);
+  if (mismoDia) return modal({title: "No se puede", cancel: "", ok: "Entendido",
+    html: `<p>${esc(nombreDe(email))} ya tiene turno ese día a las ${mismoDia.hora}. No se pueden dar dos turnos el mismo día a la misma persona.</p>`});
+  const cerca = (await state.B.reservasRango(addDays(f, -2), addDays(f, 2))).filter(r => r.email === email).map(r => r.fecha);
+  if (rachaCon(cerca, f) > (Number(state.cfg.maxSeguidos) || 1)) avisos.push(`Quedaría con más de ${state.cfg.maxSeguidos || 1} días seguidos`);
+  else if (mis.length) avisos.push("Queda en días seguidos (se permite como excepción)");
+  const lun = lunesDe(f), sem = (await state.B.reservasRango(lun, addDays(lun, 6))).filter(r => r.email === email).length;
+  if (Number(state.cfg.maxSemana) > 0 && sem >= Number(state.cfg.maxSemana)) avisos.push(`Ya tiene ${sem} turnos esa semana (máximo ${state.cfg.maxSemana})`);
+  const al = alumnoDe(email), cupo = cupoMes(al);
+  if (cupo) { const c = cicloDe(al, f), n = (await state.B.reservasRango(c.desde, c.hasta)).filter(r => r.email === email).length;
+    if (n >= cupo) avisos.push(`Ya usó sus ${cupo} turnos del ${fmtDM(c.desde)} al ${fmtDM(c.hasta)} (${planNombre(al.plan)})`); }
+  if (avisos.length && !await modal({title: "Atención", html: `<p>${avisos.map(esc).join("<br>")}</p><p class="sub" style="margin-top:8px">Como administradora podés agregarlo igual.</p>`, ok: "Agregar igual"})) return;
+  if (await run(() => state.B.reservar(email, f, h, {admin: true}), "Agregado")) { await cargarAdmin(); renderAdmin(); }
+}
+async function agMover(id) {
+  const r = [...state.resDia, ...state.pruebas].find(x => x.id === id); if (!r) return;
+  const box = await modal({title: "Mover turno", html: `<p><b>${esc(nombreRes(r))}</b> · ${fmtCorto(r.fecha)} ${r.hora}</p>
+    <label>Nueva fecha</label><input type="date" name="f" value="${r.fecha}">
+    <label>Nuevo horario</label><select name="h"></select>`, ok: "Mover",
+    onOpen: b => { const fi = b.querySelector("[name=f]"), hs = b.querySelector("[name=h]");
+      const fill = () => { const s = slotsDelDia(state.cfg, fi.value); hs.innerHTML = s.length ? s.map(x => `<option ${x === r.hora ? "selected" : ""}>${x}</option>`).join("") : `<option value="">Sin horarios ese día</option>`; };
+      fi.onchange = fill; fill(); }});
+  if (!box) return;
+  const f = box.querySelector("[name=f]").value, h = box.querySelector("[name=h]").value;
+  if (!f || !h) return toast("Elegí fecha y horario");
+  if (f === r.fecha && h === r.hora) return;
+  if (!esPrueba(r) && f !== r.fecha) {
+    const otro = (await state.B.reservasRango(f, f)).find(x => x.email === r.email && x.id !== r.id);
+    if (otro) return modal({title: "No se puede", cancel: "", ok: "Entendido",
+      html: `<p>${esc(nombreRes(r))} ya tiene turno ese día a las ${otro.hora}. No se pueden dar dos turnos el mismo día a la misma persona.</p>`});
+  }
+  if (await run(() => state.B.cambiar(r, f, h, {admin: true}), "Turno movido")) { await cargarAdmin(); renderAdmin(); }
+}
+function vBloqueos() {
+  const futuros = state.bloqueos.filter(b => b.fecha >= hoy()).sort((a, b) => (a.fecha + (a.desde || "")).localeCompare(b.fecha + (b.desde || "")));
+  const fer = FERIADOS.filter(x => x.fecha >= hoy());
+  return `<div class="card"><b>Feriados nacionales</b>
+    <p class="sub">Ya están cargados. Los feriados quedan cerrados y los días no laborables abiertos, pero podés cambiar cada uno.</p>
+    ${fer.map(x => { const c = !!feriadoCerrado(x.fecha);
+      return `<div class="person"><span class="name"><b>${fmtLargo(x.fecha)}</b><div class="small muted">${esc(x.motivo)} · ${x.tipo}</div></span>
+        <button class="att ${c ? "no" : ""}" data-a="feriado" data-f="${x.fecha}" data-v="cerrado">Cerrado</button>
+        <button class="att ${!c ? "yes" : ""}" data-a="feriado" data-f="${x.fecha}" data-v="abierto">Abierto</button></div>`; }).join("")}
+    </div>` + `<div class="card"><b>Bloquear día u horario</b>
+    <p class="sub">Feriados, días sin profe, mantenimiento… Nadie va a poder reservar ahí.</p>
+    <label>Fecha</label><input type="date" id="bFecha" value="${state.agFecha}">
+    <label class="chk"><input type="checkbox" id="bTodo" checked> Todo el día</label>
+    <div class="grid2" id="bHoras" style="display:none"><div><label>Desde</label><input type="time" id="bDesde" value="16:00"></div><div><label>Hasta</label><input type="time" id="bHasta" value="18:00"></div></div>
+    <label>Motivo (lo ven los alumnos si es todo el día)</label><input id="bMotivo" placeholder="Ej: Feriado">
+    <button class="btn" style="margin-top:12px;width:100%" data-a="addBloq">Bloquear</button></div>
+    <h2>Próximos bloqueos</h2>
+    ${futuros.length ? futuros.map(b => `<div class="card row between"><div><b>${fmtLargo(b.fecha)}</b>
+      <div class="sub">${b.desde ? `${b.desde} a ${b.hasta}` : "Todo el día"}${b.motivo ? " · " + esc(b.motivo) : ""}</div></div>
+      <button class="btn sec sm" data-a="delBloq" data-id="${esc(b.id)}">Quitar</button></div>`).join("") : `<div class="empty">No hay bloqueos cargados</div>`}`;
+}
+async function addBloqueo() {
+  const g = id => document.getElementById(id);
+  const todo = g("bTodo").checked;
+  const b = {fecha: g("bFecha").value, desde: todo ? "" : g("bDesde").value, hasta: todo ? "" : g("bHasta").value, motivo: g("bMotivo").value.trim()};
+  if (!b.fecha) return toast("Elegí una fecha");
+  if (!todo && (!b.desde || !b.hasta || b.desde >= b.hasta)) return toast("Revisá el horario");
+  const afectados = (await state.B.reservasRango(b.fecha, b.fecha)).filter(r => todo || (r.hora >= b.desde && r.hora < b.hasta));
+  if (!await run(() => state.B.saveBloqueo(b), "Bloqueado")) return;
+  await cargarAdmin(); renderAdmin();
+  if (afectados.length) await modal({title: "Hay turnos reservados ahí", cancel: "", ok: "Entendido",
+    html: `<p class="sub">Estos turnos no se borran solos. Avisales y movelos desde la Agenda:</p>${afectados.map(r => { const tel = telRes(r), nom = nombreRes(r);
+      return `<div class="person"><span class="name">${r.hora} · ${esc(nom)}</span>${tel ? `<a class="att" style="text-decoration:none" target="_blank" href="${waLink(tel, `Hola ${nom.split(" ")[0]}! Te escribimos de PowerFit por tu turno del ${fmtLargo(r.fecha)} a las ${r.hora}.`)}">WhatsApp</a>` : ""}</div>`; }).join("")}`});
+}
+function vAjustes() {
+  const c = state.cfg;
+  return `<div class="card"><b>Turnos</b>
+    <div class="grid2">
+      <div><label>Personas por turno</label><input type="number" min="1" id="cCap" value="${c.capacidad}"></div>
+      <div><label>Un turno cada (min)</label><input type="number" min="5" step="5" id="cInt" value="${c.intervalo}"></div>
+      <div><label>Duración clase (min)</label><input type="number" min="5" step="5" id="cDur" value="${c.duracion}"></div>
+      <div><label>Cancelar/cambiar hasta (min antes)</label><input type="number" min="0" step="15" id="cCan" value="${c.cancelMin}"></div>
+      <div><label>Reservar con hasta (días)</label><input type="number" min="1" id="cDias" value="${c.diasAnticipacion}"></div>
+      <div><label>Máximo de turnos por semana</label><input type="number" min="1" id="cMaxSem" value="${c.maxSemana ?? 3}"></div>
+      <div><label>Máximo de días seguidos</label><input type="number" min="1" id="cMaxSeg" value="${c.maxSeguidos ?? 2}"></div>
+    </div>
+    <p class="small muted" style="margin-top:8px">El máximo semanal es igual para todos los planes (así pueden recuperar si hay un feriado). Si reservan días seguidos, la app les avisa que es una excepción.</p></div>
+    <div class="card"><b>Horarios por día</b><p class="sub">Formato: 09:00-11:00, 16:00-21:00 · vacío = cerrado</p>
+      ${[1,2,3,4,5,6,0].map(d => `<label>${cap(DIAS_L[d])}</label><input id="cH${d}" value="${esc(c.horarios[String(d)] || "")}" placeholder="Cerrado">`).join("")}
+    </div>
+    <button class="btn" style="width:100%" data-a="saveCfg">Guardar ajustes</button>
+    <p class="small muted center" style="margin-top:14px">Los cambios se aplican al instante para todos los alumnos. Los turnos ya reservados no se modifican.</p>
+    <div class="card"><b>Profes</b><p class="sub">Entran por el link de la app de profes y solo ven la agenda: marcan presente, ausente y pagos en efectivo.</p>
+      ${(state.profesList || []).map(p => `<div class="person"><span class="name">${esc(p.nombre || "")} <span class="sub">${esc(p.email)}</span></span><button class="x" data-a="delProfe" data-e="${esc(p.email)}">×</button></div>`).join("") || `<div class="empty">Todavía no hay profes cargadas</div>`}
+      <div class="grid2" style="margin-top:6px"><div><label>Nombre</label><input id="pNom" placeholder="Juli"></div><div><label>Gmail</label><input id="pMail" type="email" placeholder="juli@gmail.com"></div></div>
+      <button class="btn sec" style="width:100%;margin-top:10px" data-a="addProfe">+ Agregar profe</button></div>
+    <div class="card"><b>Links</b>
+      ${[["alumnos","App de alumnos (reservar, cambiar y cancelar turnos)"],["profes","App de profes (agenda, asistencia y efectivo)"],["duenas","App de dueñas (esta)"],["prueba","Clase de prueba (para la landing y redes, no es para alumnos)"]].map(([k, l]) => `<label>${l}</label>
+        <div class="row"><input readonly value="${esc(LINKS[k])}" class="grow" style="width:auto;font-size:13px"><button class="btn sec sm" data-a="copiar" data-k="${k}">Copiar</button></div>`).join("")}</div>`;
+}
+async function addProfe() {
+  const nombre = document.getElementById("pNom").value.trim(), email = document.getElementById("pMail").value.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast("Poné un Gmail válido");
+  if (await run(() => state.B.saveProfe({email, nombre}), "Profe agregada")) { await cargarAdmin(); renderAdmin(); }
+}
+async function saveCfg() {
+  const g = id => document.getElementById(id);
+  const c = {
+    capacidad: Math.max(1, Number(g("cCap").value) || 1), intervalo: Math.max(5, Number(g("cInt").value) || 30),
+    duracion: Math.max(5, Number(g("cDur").value) || 20), cancelMin: Math.max(0, Math.round(Number(g("cCan").value) || 0)),
+    diasAnticipacion: Math.max(1, Number(g("cDias").value) || 30), maxSemana: Math.max(1, Number(g("cMaxSem").value) || 3), maxSeguidos: Math.max(1, Number(g("cMaxSeg").value) || 2), horarios: {},
+    feriadosEx: state.cfg.feriadosEx || {}
+  };
+  for (let d = 0; d < 7; d++) c.horarios[String(d)] = g("cH" + d).value.trim();
+  const malos = Object.values(c.horarios).filter(v => v && !v.split(",").every(r => /^\s*\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\s*$/.test(r)));
+  if (malos.length) return toast("Revisá el formato de horarios: " + malos[0]);
+  if (await run(() => state.B.saveConfig(c), "Ajustes guardados")) { state.cfg = c; renderAdmin(); }
+}
+
+/* ============================ EVENTOS ============================ */
+document.addEventListener("click", async e => {
+  const el = e.target.closest("[data-a]"); if (!el || el.closest("#modal")) return;
+  const a = el.dataset.a, B = state.B;
+  switch (a) {
+    case "login": run(() => B.login()); break;
+    case "demoLogin": B.login(el.dataset.k); break;
+    case "demoReset": if (await modal({title: "¿Reiniciar la demo?", html: "<p>Se vuelven a cargar los datos de ejemplo.</p>", ok: "Reiniciar"})) { await B.reset(); location.reload(); } break;
+    case "logout": state.unsub && state.unsub(); state.unsub = null; state.cambiando = null; await B.logout(); break;
+    case "prDia": pr.dia = el.dataset.f; renderPrueba(); break;
+    case "prSlot": prElegir(el.dataset.f, el.dataset.h); break;
+    case "prOtra": pr.listo = null; try { localStorage.removeItem(PRUEBA_KEY); } catch (e) {} renderPrueba(); break;
+    case "alta": { const r = [...state.resDia, ...state.pruebas].find(x => x.id === el.dataset.id); if (r) editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota}); break; }
+    case "dia": state.diaSel = el.dataset.f; renderAlumno(); break;
+    case "slot": clickSlot(el.dataset.f, el.dataset.h); break;
+    case "cambiar": state.cambiando = state.mis.find(r => r.id === el.dataset.id); state.diaSel = null; renderAlumno(); toast("Elegí el nuevo día y horario"); break;
+    case "noCambiar": state.cambiando = null; renderAlumno(); break;
+    case "cancelar": {
+      const r = state.mis.find(x => x.id === el.dataset.id); if (!r) return;
+      if (!puedeModificar(r)) return toast("Ya no se puede cancelar este turno");
+      if (await modal({title: "¿Cancelar turno?", html: `<p>${fmtLargo(r.fecha)} a las ${r.hora}</p>`, ok: "Sí, cancelar", cancel: "No", danger: true})) {
+        await run(() => B.cancelar(r), "Turno cancelado"); state.cambiando = null; await refrescarMis(); }
+      break; }
+    case "tab": state.tab = el.dataset.t; renderAdmin(); break;
+    case "agMove": state.agFecha = addDays(state.agFecha, Number(el.dataset.d)); await cargarAdmin(); renderAdmin(); break;
+    case "agHoy": state.agFecha = hoy(); await cargarAdmin(); renderAdmin(); break;
+    case "refresh": await cargarAdmin(); renderAdmin(); toast("Actualizado"); break;
+    case "agAdd": agAgregar(el.dataset.h); break;
+    case "agMover": agMover(el.dataset.id); break;
+    case "agDel": {
+      const r = state.resDia.find(x => x.id === el.dataset.id); if (!r) return;
+      if (await modal({title: "¿Quitar del turno?", html: `<p>${esc(nombreRes(r))} · ${r.hora}</p>`, ok: "Quitar", danger: true}))
+        if (await run(() => B.cancelar(r), "Turno quitado")) { await cargarAdmin(); renderAdmin(); }
+      break; }
+    case "pago": registrarPago(el.dataset.id); break;
+    case "feriado": {
+      const c = JSON.parse(JSON.stringify(state.cfg)); c.feriadosEx = {...(c.feriadosEx || {}), [el.dataset.f]: el.dataset.v};
+      if (await run(() => B.saveConfig(c), el.dataset.v === "cerrado" ? "Día cerrado" : "Día abierto")) {
+        state.cfg = c; await cargarAdmin(); renderAdmin();
+        const rs = el.dataset.v === "cerrado" ? (await B.reservasRango(el.dataset.f, el.dataset.f)) : [];
+        if (rs.length) await modal({title: "Hay turnos reservados ese día", cancel: "", ok: "Entendido",
+          html: `<p class="sub">No se borran solos. Avisales y movelos desde la Agenda:</p>${rs.map(r => { const tel = telRes(r), nom = nombreRes(r);
+            return `<div class="person"><span class="name">${r.hora} · ${esc(nom)}</span>${tel ? `<a class="att" target="_blank" href="${waLink(tel, `Hola ${nom.split(" ")[0]}! Te escribimos de PowerFit: el ${fmtLargo(r.fecha)} el gimnasio está cerrado. ¿Te pasamos el turno a otro día?`)}">WhatsApp</a>` : ""}</div>`; }).join("")}`});
+      }
+      break; }
+    case "copiar": try { await navigator.clipboard.writeText(LINKS[el.dataset.k]); toast("Link copiado"); } catch (err) { toast("No se pudo copiar: copialo a mano"); } break;
+    case "addProfe": addProfe(); break;
+    case "delProfe": if (await modal({title: "¿Quitar profe?", html: `<p>${esc(el.dataset.e)} ya no va a poder entrar al panel.</p>`, ok: "Quitar", danger: true}))
+      if (await run(() => B.deleteProfe(el.dataset.e), "Profe quitada")) { await cargarAdmin(); renderAdmin(); } break;
+    case "att": {
+      const r = state.resDia.find(x => x.id === el.dataset.id); if (!r) return;
+      const v = el.dataset.v === "1"; const nuevo = r.asistencia === v ? null : v;
+      if (await run(() => B.setAsistencia(r, nuevo))) { if (nuevo == null) delete r.asistencia; else r.asistencia = nuevo;
+        const m = state.resMes.find(x => x.id === r.id); if (m) { if (nuevo == null) delete m.asistencia; else m.asistencia = nuevo; } renderAdmin(); }
+      break; }
+    case "verDia": state.agFecha = el.dataset.f; state.tab = "agenda"; await cargarAdmin(); renderAdmin(); break;
+    case "copiarLink": try { await navigator.clipboard.writeText(location.origin + location.pathname + "#prueba"); toast("Link copiado"); } catch (err) { toast("No se pudo copiar: copialo a mano"); } break;
+    case "filtro": state.filtro = el.dataset.k; renderAdmin(); break;
+    case "alNuevo": editarAlumno(null); break;
+    case "alEdit": editarAlumno(el.dataset.e); break;
+    case "addBloq": addBloqueo(); break;
+    case "delBloq": if (await run(() => B.deleteBloqueo(el.dataset.id), "Bloqueo quitado")) { await cargarAdmin(); renderAdmin(); } break;
+    case "saveCfg": saveCfg(); break;
+  }
+});
+document.addEventListener("change", async e => {
+  if (e.target.id === "agDate" && e.target.value) { state.agFecha = e.target.value; await cargarAdmin(); renderAdmin(); }
+  if (e.target.id === "bTodo") document.getElementById("bHoras").style.display = e.target.checked ? "none" : "grid";
+});
+document.addEventListener("input", e => {
+  if (e.target.id === "q") { state.q = e.target.value; state._focusQ = true; renderAdmin(); state._focusQ = false; }
+});
+// Refresca la vista del alumno cada minuto (para que los turnos pasados se actualicen)
+setInterval(() => { if (state.user && RUTA === "alumnos" && state.alumno && !$modal.classList.contains("on")) renderAlumno(); }, 60e3);
+
+/* ============================ ARRANQUE ============================ */
+async function alEntrar(u) {
+  state.user = u;
+  if (!u) return renderLogin();
+  $app.innerHTML = `<div class="login">${LOGO}<p class="muted">Cargando…</p></div>`;
+  try {
+    state.cfg = await state.B.getConfig();
+    state.bloqueos = await state.B.listBloqueos();
+    state.admin = await state.B.isAdmin();
+    state.profe = !state.admin && await state.B.isProfe();
+    state.rol = state.admin ? "admin" : state.profe ? "profe" : "alumno";
+    const nuevoCfg = state.cfg._nuevo; delete state.cfg._nuevo;
+    if (state.admin && nuevoCfg) await state.B.saveConfig(state.cfg); // primera vez: guarda la configuración inicial
+    if (RUTA === "duenas") {
+      if (state.rol === "profe") return renderSinAcceso(`Esta es la app de dueñas. Las profes tienen su propia app.`, "Ir a la app de profes", LINKS.profes);
+      if (state.rol !== "admin") return renderSinAcceso(`La cuenta <b>${esc(u.email)}</b> no tiene acceso a esta app.`, "Ir a mis turnos", LINKS.alumnos);
+      state.tab = "agenda"; state.agFecha = hoy(); await cargarAdmin(); return renderAdmin();
+    }
+    if (RUTA === "profes") {
+      if (state.rol === "alumno") return renderSinAcceso(`La cuenta <b>${esc(u.email)}</b> no tiene acceso a la app de profes.`, "Ir a mis turnos", LINKS.alumnos);
+      state.rol = "profe"; // las dueñas también pueden entrar, y ven exactamente lo mismo que una profe
+      state.tab = "agenda"; state.agFecha = hoy(); await cargarAdmin(); return renderAdmin();
+    }
+    state.alumno = await state.B.getAlumno(u.email);
+    if (!state.alumno && state.rol === "admin") return renderSinAcceso("Esta es la app de alumnos. La de dueñas tiene su propio link.", "Ir a la app de dueñas", LINKS.duenas);
+    if (!state.alumno && state.rol === "profe") return renderSinAcceso("Esta es la app de alumnos. Las profes tienen su propia app.", "Ir a la app de profes", LINKS.profes);
+    state.admin = false;
+    if (!state.alumno) return renderNoAlta();
+    state.mis = await state.B.misReservas();
+    state.diaSel = null;
+    suscribirTurnos();
+    renderAlumno();
+  } catch (e) {
+    console.error(e);
+    $app.innerHTML = `${header(u.email)}<div class="wrap"><div class="card center"><p>No se pudo cargar la información.</p><p class="sub">${esc(traducirError(e))}</p>
+      <button class="btn" style="margin-top:12px" onclick="location.reload()">Reintentar</button></div></div>`;
+  }
+}
+(async () => {
+  try { state.B = FIREBASE_CONFIG.apiKey ? await firebaseBackend() : demoBackend(); }
+  catch (e) { console.error(e); $app.innerHTML = `<div class="login">${LOGO}<p>No se pudo conectar. Revisá tu conexión.</p></div>`; return; }
+  if (RUTA === "prueba") arrancarPrueba(); else state.B.init(alEntrar);
+})();
+window.addEventListener("hashchange", () => location.reload());
+</script>
+</body>
+</html>
