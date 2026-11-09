@@ -328,6 +328,10 @@ function demoBackend() {
     async saveAlumno(a) { S.alumnos = S.alumnos.filter(x => x.email !== a.email); S.alumnos.push(clone(a)); notify(); },
     async deleteAlumno(email) { S.alumnos = S.alumnos.filter(x => x.email !== email); notify(); },
     async listMp() { return clone(S.mp || []); },
+    async subirComprobante(c) { S.comprobantes = S.comprobantes || []; S.comprobantes.push({...clone(c), id: "c" + Date.now(), email: me.email, estado: "pendiente"}); notify(); },
+    async misComprobantes() { return clone((S.comprobantes || []).filter(c => c.email === me.email)).map(({img, ...c}) => c); },
+    async listComprobantes() { return clone((S.comprobantes || []).filter(c => c.estado === "pendiente")); },
+    async resolverComprobante(id, cambios) { const c = (S.comprobantes || []).find(x => x.id === id); if (c) Object.assign(c, cambios); notify(); },
     async vincularMp(id, email) { const m = (S.mp || []).find(x => x.id === id); if (m) m.alumno = email; const a = S.alumnos.find(x => x.email === email); if (a) a.mpSuscripcion = id; notify(); },
     async listBloqueos() { return clone(S.bloqueos); },
     async saveBloqueo(b) { b.id = b.id || b.fecha + "_" + (b.desde || "todo").replace(":", ""); S.bloqueos = S.bloqueos.filter(x => x.id !== b.id); S.bloqueos.push(clone(b)); notify(); },
@@ -483,6 +487,18 @@ async function firebaseBackend() {
     async deleteAlumno(email) { await deleteDoc(doc(db, "alumnos", email)); },
     // Débitos de Mercado Pago que trae el programa de avisos (colección "mp")
     async listMp() { try { return (await getDocs(collection(db, "mp"))).docs.map(d => ({id: d.id, ...d.data()})); } catch (e) { console.warn(e); return []; } },
+    // Comprobantes de transferencia (Prex, banco): la alumna sube la foto, las dueñas aprueban y se renueva el plan
+    async subirComprobante(c) { await setDoc(doc(collection(db, "comprobantes")), {...c, email: me.email, estado: "pendiente", creado: serverTimestamp()}); },
+    async misComprobantes() {
+      const s = await getDocs(query(collection(db, "comprobantes"), where("email", "==", me.email)));
+      return s.docs.map(d => { const {img, creado, ...c} = d.data(); return {id: d.id, ...c}; });
+    },
+    async listComprobantes() {
+      try { const s = await getDocs(query(collection(db, "comprobantes"), where("estado", "==", "pendiente")));
+        return s.docs.map(d => { const {creado, ...c} = d.data(); return {id: d.id, ...c}; }); }
+      catch (e) { console.warn(e); return []; }
+    },
+    async resolverComprobante(id, cambios) { await updateDoc(doc(db, "comprobantes", id), cambios); },
     async vincularMp(id, email, antes) {
       await updateDoc(doc(db, "mp", id), {alumno: email});
       if (antes && antes !== email) await setDoc(doc(db, "alumnos", antes), {mpSuscripcion: deleteField()}, {merge: true});
@@ -749,6 +765,8 @@ function renderAlumno() {
       <div class="sub">Plan ${esc(planNombre(al.plan).toLowerCase())}</div>
       <div class="sub">${cupo ? `Te quedan <b style="color:var(--text)">${Math.max(0, cupo - usadasC)}</b> de ${cupo} turnos hasta el ${fmtDM(cicHoy.hasta)}` : ""}</div></div>${venceBadge}</div></div>
 
+    ${cardComprobante()}
+
     <h2>Mis próximos turnos</h2>
     ${proximos.length ? proximos.map(r => {
       const ok = puedeModificar(r);
@@ -774,6 +792,104 @@ function renderAlumno() {
     <p class="small muted center" style="margin-top:20px">Clases de ${cfg.duracion} min · hasta ${cfg.capacidad} personas · podés cambiar o cancelar hasta ${cfg.cancelMin >= 60 ? (cfg.cancelMin / 60) + " h" : cfg.cancelMin + " min"} antes</p>
     ${ayudaWA(`Hola! Soy ${al.nombre || state.user.nombre || ""} (${state.user.email}) y tengo un problema con la app de turnos.`)}
   </div>`;
+}
+/* ---------- Comprobantes de transferencia ---------- */
+function cardComprobante() {
+  const ult = (state.comps || []).slice().sort((a, b) => (b.subido || 0) - (a.subido || 0))[0];
+  const reciente = ult && Date.now() - (ult.subido || 0) < 30 * 864e5;
+  const estado = !reciente ? "" : ult.estado === "pendiente" ? `<div class="note acc" style="margin:8px 0 0">🧾 Recibimos tu comprobante del ${fmtDM(ult.fecha)}. Lo estamos revisando.</div>`
+    : ult.estado === "aprobado" ? `<div class="note" style="margin:8px 0 0">✅ Pago aprobado: plan renovado hasta el ${fmtFecha(ult.vence)}.</div>`
+    : ult.estado === "rechazado" ? `<div class="note" style="margin:8px 0 0">No pudimos validar tu comprobante del ${fmtDM(ult.fecha)}${ult.motivo ? ": " + esc(ult.motivo) : ""}. Escribinos.</div>` : "";
+  return `<div class="card"><div class="row between"><div><b>¿Pagaste por transferencia?</b>
+      <div class="sub">Subí el comprobante y te renovamos el plan.</div></div>
+      <button class="btn sec sm" data-a="compSubir">🧾 Subir</button></div>${estado}</div>`;
+}
+// Achica la foto para que entre en la base de datos (o acepta un PDF chico)
+function archivoADataURL(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onerror = () => rej(new Error("No se pudo leer el archivo"));
+    if (/pdf/i.test(file.type)) {
+      if (file.size > 650000) return rej(new Error("El PDF es muy pesado: mandá una captura de pantalla del comprobante"));
+      fr.onload = () => res(fr.result); return fr.readAsDataURL(file);
+    }
+    if (!/^image\//.test(file.type)) return rej(new Error("Tiene que ser una foto o un PDF"));
+    fr.onload = () => {
+      const im = new Image();
+      im.onload = () => {
+        const k = Math.min(1, 1400 / Math.max(im.width, im.height)), c = document.createElement("canvas");
+        c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+        const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+        let q = 0.75, u = c.toDataURL("image/jpeg", q);
+        while (u.length > 700000 && q > 0.3) { q -= 0.1; u = c.toDataURL("image/jpeg", q); }
+        res(u);
+      };
+      im.onerror = () => rej(new Error("No se pudo abrir la imagen"));
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function subirComprobante() {
+  const box = await modal({title: "Subir comprobante", ok: "Enviar", html: `<p class="sub">Subí la captura de la transferencia (Prex, banco o billetera). La revisamos y te renovamos el plan.</p>
+    <label>Comprobante (foto o PDF)</label><input type="file" name="f" accept="image/*,application/pdf">
+    <label>Monto que pagaste</label><input type="number" name="m" inputmode="numeric" placeholder="Ej: 306000">
+    <label>Nota (opcional)</label><input name="n" placeholder="Ej: pago de 2 meses">`});
+  if (!box) return;
+  const file = box.querySelector("[name=f]").files[0];
+  if (!file) return toast("Elegí la foto o el PDF del comprobante");
+  let img; try { img = await archivoADataURL(file); } catch (e) { return toast(e.message); }
+  const c = {img, tipo: /pdf/i.test(file.type) ? "pdf" : "img", monto: Number(box.querySelector("[name=m]").value) || 0,
+    nota: box.querySelector("[name=n]").value.trim().slice(0, 200), nombre: state.alumno.nombre || "", fecha: hoy(), subido: Date.now()};
+  if (await run(() => state.B.subirComprobante(c), "¡Listo! Lo revisamos y te avisamos por mail")) {
+    state.comps = await state.B.misComprobantes().catch(() => state.comps); renderAlumno();
+  }
+}
+function compPendientes() {
+  const p = (state.comps || []).slice().sort((a, b) => (a.subido || 0) - (b.subido || 0));
+  if (!p.length) return "";
+  return `<div class="note acc"><b>🧾 Comprobantes para revisar (${p.length})</b>
+    ${p.map(c => { const a = alumnoDe(c.email);
+      return `<div class="card" style="margin:8px 0"><div class="row between"><div><b>${esc(a?.nombre || c.nombre || c.email)}</b>
+          <div class="sub">Subido el ${fmtDM(c.fecha)}${c.monto ? " · " + plata(c.monto) : ""}${a ? " · " + esc(planNombre(a.plan)) + (a.vence ? " · vence " + fmtFecha(a.vence) : "") : ""}</div>
+          ${c.nota ? `<div class="small">${esc(c.nota)}</div>` : ""}</div>
+        <button class="btn sec sm" data-a="compVer" data-id="${esc(c.id)}">Ver</button></div>
+        <div class="row" style="margin-top:8px"><button class="btn sm" data-a="compOk" data-id="${esc(c.id)}">Aprobar y renovar</button>
+        <button class="btn bad sm" data-a="compNo" data-id="${esc(c.id)}">Rechazar</button></div></div>`; }).join("")}</div>`;
+}
+async function verComprobante(id) {
+  const c = (state.comps || []).find(x => x.id === id); if (!c) return;
+  const url = c.tipo === "pdf" ? URL.createObjectURL(await (await fetch(c.img)).blob()) : c.img;
+  await modal({title: "Comprobante de " + (alumnoDe(c.email)?.nombre || c.nombre || c.email), cancel: "", ok: "Cerrar",
+    html: c.tipo === "pdf" ? `<iframe src="${url}" style="width:100%;height:60vh;border:0;background:#fff;border-radius:10px"></iframe><p><a class="link" target="_blank" href="${url}">Abrir el PDF</a></p>`
+      : `<img src="${url}" alt="Comprobante" style="width:100%;border-radius:10px;background:#fff">`});
+}
+async function aprobarComprobante(id) {
+  const c = (state.comps || []).find(x => x.id === id), a = c && alumnoDe(c.email);
+  if (!a) return toast("No encuentro la alumna de este comprobante en Alumnos");
+  const h = hoy(), meses0 = PAGOS.find(x => x.id === a.pago)?.meses || 1;
+  // sigue desde el vencimiento anterior, salvo que haga más de 10 días que se venció
+  const ini0 = a.vence && a.vence >= addDays(h, -10) ? a.vence : h;
+  const box = await modal({title: "Aprobar y renovar", ok: "Aprobar", html: `<p><b>${esc(a.nombre || a.email)}</b>${c.monto ? " · pagó " + plata(c.monto) : ""}</p>
+    <div class="grid2"><div><label>Nuevo inicio</label><input type="date" name="i" value="${ini0}"></div>
+    <div><label>Meses que paga</label><select name="m">${[1, 2, 3].map(n => `<option value="${n}" ${n === meses0 ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>
+    <p class="sub" style="margin-top:10px">Vence: <b id="cVence"></b></p>`,
+    onOpen: b => { const i = b.querySelector("[name=i]"), m = b.querySelector("[name=m]"), v = b.querySelector("#cVence");
+      const calc = () => v.textContent = i.value ? fmtFecha(addMonths(i.value, Number(m.value))) : "—"; i.onchange = m.onchange = calc; calc(); }});
+  if (!box) return;
+  const inicio = box.querySelector("[name=i]").value, vence = addMonths(inicio, Number(box.querySelector("[name=m]").value));
+  if (!inicio) return toast("Elegí la fecha de inicio");
+  if (await run(async () => {
+    await state.B.saveAlumno({...a, inicio, vence, activo: true});
+    await state.B.resolverComprobante(id, {estado: "aprobado", inicio, vence, revisado: h});
+  }, "Aprobado: plan renovado hasta el " + fmtFecha(vence))) { await cargarAdmin(); renderAdmin(); }
+}
+async function rechazarComprobante(id) {
+  const box = await modal({title: "Rechazar comprobante", ok: "Rechazar", danger: true,
+    html: `<label>Motivo (le llega a la alumna)</label><input name="mo" placeholder="Ej: no vemos la transferencia acreditada">`});
+  if (!box) return;
+  const motivo = box.querySelector("[name=mo]").value.trim().slice(0, 200);
+  if (await run(() => state.B.resolverComprobante(id, {estado: "rechazado", motivo, revisado: hoy()}), "Comprobante rechazado")) { await cargarAdmin(); renderAdmin(); }
 }
 async function refrescarMis() { state.mis = await state.B.misReservas(); state.alumno = await state.B.getAlumno(state.user.email) || state.alumno; renderAlumno(); }
 async function clickSlot(f, h) {
@@ -809,7 +925,7 @@ async function cargarAdmin() {
   state.pruebas = pru.filter(esPrueba).sort((a, b) => a.inicio - b.inicio);
   state.alumnos = al.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
   state.resDia = dia; state.resMes = mes; state.bloqueos = bl;
-  if (state.rol === "admin") [state.profesList, state.mp] = await Promise.all([state.B.listProfes(), state.B.listMp()]);
+  if (state.rol === "admin") [state.profesList, state.mp, state.comps] = await Promise.all([state.B.listProfes(), state.B.listMp(), state.B.listComprobantes()]);
 }
 const alumnoDe = email => state.alumnos.find(a => a.email === email);
 const nombreDe = email => alumnoDe(email)?.nombre || email;
@@ -932,6 +1048,7 @@ function vAlumnos() {
       <button class="btn sm" data-a="alNuevo">+ Nuevo</button></div>
     <div class="tabs">${[["todos","Todos (" + state.alumnos.length + ")"],["pronto","Vencen pronto (" + cnt("pronto") + ")"],["vencido","Vencidos (" + cnt("vencido") + ")"],["inactivo","Inactivos (" + cnt("inactivo") + ")"]]
       .map(([k, l]) => `<button class="tab ${state.filtro === k ? "sel" : ""}" data-a="filtro" data-k="${k}">${l}</button>`).join("")}</div>
+    ${compPendientes()}
     ${mpPendientes()}
     ${list.length ? list.map(a => { const s = statsAlumno(a.email), e = estadoVence(a);
       return `<div class="card" data-a="alEdit" data-e="${esc(a.email)}" style="cursor:pointer"><div class="row between"><b>${esc(a.nombre || a.email)}</b>${e.html}</div>
@@ -1223,6 +1340,10 @@ document.addEventListener("click", async e => {
     case "filtro": state.filtro = el.dataset.k; renderAdmin(); break;
     case "alNuevo": editarAlumno(null); break;
     case "alEdit": editarAlumno(el.dataset.e); break;
+    case "compSubir": subirComprobante(); break;
+    case "compVer": verComprobante(el.dataset.id); break;
+    case "compOk": aprobarComprobante(el.dataset.id); break;
+    case "compNo": rechazarComprobante(el.dataset.id); break;
     case "mpVincular": {
       const id = el.dataset.id, email = document.getElementById("mpSel_" + id)?.value;
       if (!email) { toast("Elegí la alumna"); break; }
@@ -1275,6 +1396,7 @@ async function alEntrar(u) {
     state.admin = false;
     if (!state.alumno) return renderNoAlta();
     state.mis = await state.B.misReservas();
+    state.comps = await state.B.misComprobantes().catch(e => { console.warn(e); return []; });
     state.diaSel = null;
     suscribirTurnos();
     renderAlumno();
