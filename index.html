@@ -66,6 +66,29 @@
   .tabs{display:flex;gap:6px;overflow-x:auto;margin:6px 0 4px}
   .tab{background:var(--card);color:var(--muted);border:1px solid var(--line);padding:9px 14px;flex:0 0 auto}
   .tab.sel{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:700}
+  body.ancho .wrap{max-width:1320px}
+  .semana{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 16px 12px;margin:0 -16px}
+  .col{flex:1 0 236px;min-width:236px;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px;align-self:flex-start}
+  .col.al{flex-basis:150px;min-width:150px}
+  .col.hoy{border-color:var(--accent)}
+  .colh{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+  .colh b{text-transform:uppercase;font-size:14px;letter-spacing:.04em}
+  .colh small{display:block;color:var(--muted);font-size:13px}
+  .hoytag{background:var(--accent);color:var(--accent-text);font-size:10px;font-weight:800;padding:3px 7px;border-radius:99px}
+  .blq{margin-top:8px;border-radius:10px;overflow:hidden;background:var(--card2);border:1px solid var(--line)}
+  .blqh{background:#04060a;color:#fff;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:13px}
+  .blqh b{font-size:15px;margin-right:4px}
+  .blqh .mas{background:none;color:#fff;border:1.5px solid #fff;border-radius:50%;width:22px;height:22px;line-height:18px;padding:0;font-size:16px}
+  .pp{display:flex;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid var(--line);width:100%;background:none;color:var(--text);text-align:left;border-radius:0}
+  .pp:hover{background:rgba(255,255,255,.04)}
+  .av{width:34px;height:34px;border-radius:50%;background:#1b2a55;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .av.pr{background:var(--accent)}
+  .pp .nm{flex:1;min-width:0}
+  .pp .nm b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pp .nm small{display:block;font-size:12px;color:var(--muted)}
+  .libre{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);padding:5px 10px;margin-top:6px;border:1px dashed var(--line);border-radius:10px}
+  .col .slot{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:6px;padding:9px 10px;text-align:left}
+  .col .slot b{display:inline;font-size:15px}
   .agslot{border-bottom:1px solid var(--line);padding:10px 0}
   .agslot:last-child{border-bottom:none}
   .person{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--card2);border-radius:10px;padding:8px 10px;margin-top:6px}
@@ -761,6 +784,12 @@ function suscribirTurnos() {
   state.unsub = state.B.listenTurnos(d[0], d[d.length - 1], m => { state.turnos = m; if (RUTA === "alumnos") renderAlumno(); });
 }
 function renderAlumno() {
+  const scPrev = document.querySelector(".semana"), scLeft = scPrev && state._semAlPrev === state.semAl ? scPrev.scrollLeft : 0;
+  pintarAlumno();
+  const sc = document.querySelector(".semana"); if (sc) sc.scrollLeft = scLeft; // no salta al principio al actualizarse
+  state._semAlPrev = state.semAl;
+}
+function pintarAlumno() {
   const al = state.alumno, cfg = state.cfg, ahora = Date.now();
   const proximos = state.mis.filter(r => r.inicio > ahora).sort((a, b) => a.inicio - b.inicio);
   const lunHoy = lunesDe(hoy()), usadasSem = state.mis.filter(r => lunesDe(r.fecha) === lunHoy).length, maxSem = Number(cfg.maxSemana) || 0;
@@ -791,18 +820,7 @@ function renderAlumno() {
 
     <h2>${camb ? "Elegí el nuevo horario" : "Reservar turno"}</h2>
     ${camb ? `<div class="note acc">Vas a reemplazar el turno del <b>${fmtLargo(camb.fecha)} a las ${camb.hora}</b>. <button class="link" data-a="noCambiar">No cambiar</button></div>` : ""}
-    <div class="days">${dias.map(d => { const off = !slotsDelDia(cfg, d).length || diaBloqueado(d);
-      return `<button class="day ${d === f ? "sel" : ""} ${off ? "off" : ""}" data-a="dia" data-f="${d}"><small>${DIAS[dow(d)]}</small><b>${Number(d.slice(8))}</b><small>${MESES[Number(d.slice(5,7))-1].slice(0,3)}</small></button>`; }).join("")}</div>
-    ${diaBloqueado(f) ? `<div class="note">Este día no hay clases${diaBloqueado(f).motivo ? ": " + esc(diaBloqueado(f).motivo) : ""}.</div>` :
-      !slots.length ? `<div class="empty">No hay clases este día</div>` : `
-      ${motivoDia ? `<div class="note">${esc(motivoDia)}</div>` : ""}
-      <div class="slots">${slots.map(h => {
-        const sid = slotId(f, h), n = state.turnos[sid] || 0, libres = cfg.capacidad - n;
-        const mine = state.mis.some(r => r.slot === sid), past = inicioMs(f, h) <= ahora, blk = bloqueo(f, h);
-        const cls = mine ? "mine" : past ? "past" : blk ? "blk" : libres <= 0 ? "full" : "";
-        const txt = mine ? "Tu turno" : past ? "—" : blk ? "No disponible" : libres <= 0 ? "Completo" : `${libres} lugar${libres === 1 ? "" : "es"}`;
-        return `<button class="slot ${cls}" data-a="slot" data-f="${f}" data-h="${h}" ${(past || blk || (libres <= 0 && !mine) || (motivoDia && !mine)) ? "disabled" : ""}><b>${h}</b><small>${txt}</small></button>`;
-      }).join("")}</div>`}
+    ${semanaAlumna(al, camb)}
     <p class="small muted center" style="margin-top:20px">Clases de ${cfg.duracion} min · hasta ${cfg.capacidad} personas · podés cambiar o cancelar hasta ${cfg.cancelMin >= 60 ? (cfg.cancelMin / 60) + " h" : cfg.cancelMin + " min"} antes</p>
     ${ayudaWA(`Hola! Soy ${al.nombre || state.user.nombre || ""} (${state.user.email}) y tengo un problema con la app de turnos.`)}
   </div>`;
@@ -905,6 +923,30 @@ async function rechazarComprobante(id) {
   const motivo = box.querySelector("[name=mo]").value.trim().slice(0, 200);
   if (await run(() => state.B.resolverComprobante(id, {estado: "rechazado", motivo, revisado: hoy()}), "Comprobante rechazado")) { await cargarAdmin(); renderAdmin(); }
 }
+// Turnos de la alumna en formato semana: una columna por día, con los horarios y los lugares libres
+function semanaAlumna(al, camb) {
+  const cfg = state.cfg, ahora = Date.now(), dias = diasReservables(), ult = dias[dias.length - 1];
+  if (!state.semAl) state.semAl = lunesDe(hoy());
+  const lun = state.semAl, exc = camb?.id;
+  const semDias = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(lun, i)).filter(d => d >= hoy() && d <= ult && (dow(d) !== 0 || slotsDelDia(cfg, d).length));
+  const col = d => {
+    const slots = slotsDelDia(cfg, d), dB = diaBloqueado(d);
+    const motivo = slots.length && !dB ? (() => { const t = validarReserva(al, state.mis, d, "23:59", exc); return t && !/pasó/.test(t) ? t : null; })() : null;
+    return `<div class="col al ${d === hoy() ? "hoy" : ""}"><div class="colh"><div><b>${DIAS[dow(d)]}</b><small>${Number(d.slice(8))} ${MESES[Number(d.slice(5, 7)) - 1].slice(0, 3)}</small></div>${d === hoy() ? `<span class="hoytag">HOY</span>` : ""}</div>
+      ${dB ? `<div class="small muted" style="padding:8px 0">Sin clases${dB.motivo ? ": " + esc(dB.motivo) : ""}</div>` : !slots.length ? `<div class="small muted" style="padding:8px 0">Sin clases</div>` : `
+      ${motivo ? `<div class="small" style="color:var(--warn);margin-top:4px">${esc(motivo)}</div>` : ""}
+      ${slots.map(h => {
+        const sid = slotId(d, h), n = state.turnos[sid] || 0, libres = cfg.capacidad - n;
+        const mine = state.mis.some(r => r.slot === sid), past = inicioMs(d, h) <= ahora, blk = bloqueo(d, h);
+        const cls = mine ? "mine" : past ? "past" : blk ? "blk" : libres <= 0 ? "full" : "";
+        const txt = mine ? "Tu turno" : past ? "—" : blk ? "No disp." : libres <= 0 ? "Completo" : `${libres} lugar${libres === 1 ? "" : "es"}`;
+        return `<button class="slot ${cls}" data-a="slot" data-f="${d}" data-h="${h}" ${(past || blk || (libres <= 0 && !mine) || (motivo && !mine)) ? "disabled" : ""}><b>${h}</b><small>${txt}</small></button>`;
+      }).join("")}`}</div>`;
+  };
+  return `<div class="row between" style="margin:4px 0 10px"><button class="btn sec sm" data-a="semAl" data-d="-7" ${lun <= lunesDe(hoy()) ? "disabled" : ""}>‹</button>
+      <b>${rangoSemana(lun)}</b><button class="btn sec sm" data-a="semAl" data-d="7" ${addDays(lun, 7) > ult ? "disabled" : ""}>›</button></div>
+    <div class="semana">${semDias.map(col).join("") || `<div class="empty">No hay días para reservar esta semana</div>`}</div>`;
+}
 async function refrescarMis() { state.mis = await state.B.misReservas(); state.alumno = await state.B.getAlumno(state.user.email) || state.alumno; renderAlumno(); }
 async function clickSlot(f, h) {
   const sid = slotId(f, h);
@@ -930,11 +972,13 @@ async function clickSlot(f, h) {
 /* ============================ PANEL ADMIN ============================ */
 async function cargarAdmin() {
   const ym = state.agFecha.slice(0, 7);
-  const [al, dia, mes, bl, pru] = await Promise.all([
+  const lun = lunesDe(state.agFecha);
+  const [al, dia, mes, bl, pru, sem] = await Promise.all([
     state.B.listAlumnos(), state.B.reservasRango(state.agFecha, state.agFecha),
     state.B.reservasRango(ym + "-01", ym + "-31"), state.B.listBloqueos(),
-    state.B.reservasRango(addDays(hoy(), -45), addDays(hoy(), 60))
+    state.B.reservasRango(addDays(hoy(), -45), addDays(hoy(), 60)), state.B.reservasRango(lun, addDays(lun, 6))
   ]);
+  state.resSem = sem;
   state.resRango = pru; // todas las reservas de -45 a +60 días (para contar cupos)
   state.pruebas = pru.filter(esPrueba).sort((a, b) => a.inicio - b.inicio);
   state.alumnos = al.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
@@ -943,6 +987,9 @@ async function cargarAdmin() {
     state.B.listProfes(), state.B.listMp(), state.B.listComprobantes(), state.B.listDifusiones(), state.B.listPlantillas()]);
 }
 const alumnoDe = email => state.alumnos.find(a => a.email === email);
+// Todas las reservas cargadas (día, semana, pruebas), sin repetir
+const resPool = () => { const m = new Map(); [...(state.resDia || []), ...(state.resSem || []), ...(state.pruebas || [])].forEach(r => m.set(r.id, r)); return [...m.values()]; };
+const resPorId = id => resPool().find(r => r.id === id);
 const nombreDe = email => alumnoDe(email)?.nombre || email;
 const nombreRes = r => esPrueba(r) ? (r.nombre || "Clase de prueba") : nombreDe(r.email);
 const telRes = r => esPrueba(r) ? r.telefono : alumnoDe(r.email)?.telefono;
@@ -952,10 +999,18 @@ function renderAdmin() {
   const esAdm = state.rol === "admin";
   if (!esAdm) state.tab = "agenda";
   const tabs = [["agenda","Agenda"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos"],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
-  const body = {agenda: vAgenda, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
+  const semana = state.tab === "agenda" && state.vista !== "dia";
+  const body = {agenda: semana ? vAgendaSemana : vAgenda, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
+  document.body.classList.toggle("ancho", semana);
+  const prevSem = document.querySelector(".semana"), prevScroll = prevSem && state._semLun === lunesDe(state.agFecha) ? prevSem.scrollLeft : null;
   $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
     ${!esAdm ? "" : `<div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${state.tab === k ? "sel" : ""}" data-a="tab" data-t="${k}">${l}</button>`).join("")}</div>`}
     ${body}</div>`;
+  if (semana) { // vuelve a donde estaba, o muestra primero el día elegido
+    const sc = document.querySelector(".semana"), c = document.querySelector(`.col[data-f="${state.agFecha}"]`);
+    if (sc) sc.scrollLeft = prevScroll != null ? prevScroll : c ? c.offsetLeft - sc.offsetLeft - 16 : 0;
+    state._semLun = lunesDe(state.agFecha);
+  }
   if (state.tab === "alumnos") { const q = document.getElementById("q"); if (q && state._focusQ) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
 }
 function vAgenda() {
@@ -972,7 +1027,7 @@ function vAgenda() {
       <div class="center grow"><b>${fmtLargo(f)}</b><div class="sub">${total} turno${total === 1 ? "" : "s"} reservado${total === 1 ? "" : "s"}${f === hoy() ? " · hoy" : ""}</div></div>
       <button class="btn sec sm" data-a="agMove" data-d="1">›</button></div>
     <div class="row" style="margin-top:10px"><input type="date" id="agDate" value="${f}" class="grow" style="width:auto">
-      <button class="btn sec sm" data-a="agHoy">Hoy</button><button class="btn sec sm" data-a="refresh">↻</button></div>
+      <button class="btn sec sm" data-a="agHoy">Hoy</button><button class="btn sec sm" data-a="vista" data-v="semana">Semana</button><button class="btn sec sm" data-a="refresh">↻</button></div>
     <div class="row small muted" style="margin-top:10px;gap:14px"><span>✅ ${pres} presentes</span><span>❌ ${aus} ausentes</span><span>💵 ${plata(efDia)} efectivo hoy</span>${adm ? `<span>· ${plata(efMes)} en ${nombreMes(f.slice(0,7))}</span>` : ""}</div></div>
     ${dB ? `<div class="note">${dB.feriado ? "Feriado" : "Día bloqueado"}${dB.motivo ? ": " + esc(dB.motivo) : ""}. Nadie puede reservar.${adm ? (dB.feriado ? ` <button class="link" data-a="feriado" data-f="${f}" data-v="abierto">Abrir igual</button>` : ` <button class="link" data-a="delBloq" data-id="${esc(dB.id)}">Desbloquear</button>`) : ""}</div>`
       : feriadoDe(f) ? `<div class="note acc">${esc(feriadoDe(f).motivo)} (${feriadoDe(f).tipo}): el gimnasio está abierto.${adm ? ` <button class="link" data-a="feriado" data-f="${f}" data-v="cerrado">Cerrar este día</button>` : ""}</div>` : ""}
@@ -994,9 +1049,107 @@ function vAgenda() {
             <button class="x" data-a="agDel" data-id="${esc(r.id)}" title="Quitar">×</button>` : ""}</div>`; }).join("")}
       </div>`; }).join("")}</div>`}`;
 }
+/* ---------- Agenda semanal (dueñas y profes) ---------- */
+function rangoSemana(lun) {
+  const dom = addDays(lun, 6), m1 = MESES[Number(lun.slice(5, 7)) - 1].slice(0, 3), m2 = MESES[Number(dom.slice(5, 7)) - 1].slice(0, 3);
+  return `${Number(lun.slice(8))}${m1 !== m2 ? " " + m1 : ""} – ${Number(dom.slice(8))} ${m2} ${dom.slice(0, 4)}`;
+}
+function vAgendaSemana() {
+  const cfg = state.cfg, lun = lunesDe(state.agFecha), adm = state.rol === "admin", rsem = state.resSem || [];
+  const dias = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(lun, i)).filter(d => dow(d) !== 0 || slotsDelDia(cfg, d).length || rsem.some(r => r.fecha === d));
+  const pres = rsem.filter(r => r.asistencia === true).length, aus = rsem.filter(r => r.asistencia === false).length;
+  const ef = rsem.reduce((t, r) => t + (Number(r.pago?.monto) || 0), 0);
+  return `<div class="card"><div class="row between" style="flex-wrap:wrap;gap:8px">
+      <div class="row" style="gap:6px"><button class="btn sec sm" data-a="agHoy">Hoy</button>
+        <button class="btn sec sm" data-a="agMove" data-d="-7">‹</button><b style="min-width:150px;text-align:center">${rangoSemana(lun)}</b>
+        <button class="btn sec sm" data-a="agMove" data-d="7">›</button></div>
+      <div class="row" style="gap:6px"><input type="date" id="agDate" value="${state.agFecha}" style="width:auto">
+        <button class="btn sec sm" data-a="vista" data-v="dia">Día</button><button class="btn sec sm" data-a="refresh">↻</button></div></div>
+    <div class="row small muted" style="margin-top:10px;gap:14px;flex-wrap:wrap"><span>${rsem.length} turnos en la semana</span><span>✅ ${pres} presentes</span><span>❌ ${aus} ausentes</span><span>💵 ${plata(ef)} efectivo</span></div></div>
+  <div class="semana">${dias.map(d => colDia(d, rsem.filter(r => r.fecha === d), adm)).join("")}</div>
+  <p class="small muted center">Tocá una persona para marcar presente, cobrar en efectivo, ver la ficha o mover el turno.</p>`;
+}
+function colDia(d, rs, adm) {
+  const cfg = state.cfg, dB = diaBloqueado(d), fer = feriadoDe(d);
+  const horas = [...new Set([...slotsDelDia(cfg, d), ...rs.map(r => r.hora)])].sort();
+  const bloques = horas.map(h => bloqueSlot(d, h, rs.filter(r => r.hora === h), adm)).join("");
+  return `<div class="col ${d === hoy() ? "hoy" : ""}" data-f="${d}"><div class="colh"><div><b>${DIAS_L[dow(d)]}</b>
+      <small>${Number(d.slice(8))} ${MESES[Number(d.slice(5, 7)) - 1].slice(0, 3)}</small></div>
+      <div class="row" style="gap:6px">${d === hoy() ? `<span class="hoytag">HOY</span>` : ""}${adm && !dB && slotsDelDia(cfg, d).length && d >= hoy() ? `<button class="btn sec sm" data-a="agAddDia" data-f="${d}" title="Agregar alumna">+</button>` : ""}</div></div>
+    ${dB ? `<div class="note" style="margin:6px 0 0">${dB.feriado ? "Feriado" : "Cerrado"}${dB.motivo ? ": " + esc(dB.motivo) : ""}</div>`
+      : fer ? `<div class="small muted">${esc(fer.motivo)} · abierto</div>` : ""}
+    ${bloques || `<div class="empty small" style="padding:14px 0">Sin actividades</div>`}</div>`;
+}
+function bloqueSlot(d, h, rs, adm) {
+  const cfg = state.cfg, blk = bloqueo(d, h), pasado = inicioMs(d, h) < Date.now() - 864e5;
+  if (!rs.length) return ""; // los horarios vacíos no se muestran (se agrega con el + del día)
+  return `<div class="blq"><div class="blqh"><div><b>${h}</b>Electrofitness<div class="small" style="opacity:.7">${cfg.duracion} min</div></div>
+      <div class="row" style="gap:8px"><span>${rs.length}/${cfg.capacidad}</span>${adm && !blk && rs.length < cfg.capacidad ? `<button class="mas" data-a="agAdd" data-f="${d}" data-h="${h}" title="Agregar">+</button>` : ""}</div></div>
+    ${rs.map(personaFila).join("")}</div>`;
+}
+function personaFila(r) {
+  const prueba = esPrueba(r), a = prueba ? null : alumnoDe(r.email), nom = nombreRes(r);
+  const ini = nom.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase() || "?";
+  let sub = "";
+  if (prueba) sub = `<span class="badge prueba">PRUEBA</span>`;
+  else if (a) { const cupo = cupoMes(a), c = cicloDe(a, r.fecha);
+    const mias = (state.resRango || []).filter(x => x.email === r.email && x.fecha >= c.desde && x.fecha <= c.hasta).sort((x, y) => x.inicio - y.inicio);
+    const n = mias.findIndex(x => x.id === r.id) + 1;
+    const v = (PLANES.find(p => p.id === a.plan) || {}).veces;
+    sub = (cupo && n ? `${n}/${cupo} · ` : "") + (v ? `${v} ${v === 1 ? "vez" : "veces"}/sem` : ""); }
+  const est = (r.asistencia === true ? "✅" : r.asistencia === false ? "❌" : "") + (r.pago ? "💵" : "");
+  return `<button class="pp" data-a="persona" data-id="${esc(r.id)}"><span class="av ${prueba ? "pr" : ""}">${esc(ini)}</span>
+    <span class="nm"><b>${esc(nom)}</b><small>${sub}</small>${a?.notas ? `<small style="color:var(--warn)">⚠️ ${esc(a.notas)}</small>` : ""}</span><span>${est}</span></button>`;
+}
+async function agregarEnDia(d) {
+  const horas = slotsDelDia(state.cfg, d).filter(h => !bloqueo(d, h) && inicioMs(d, h) > Date.now() - 36e5);
+  if (!horas.length) return toast("No quedan horarios ese día");
+  const ocup = h => resPool().filter(r => r.fecha === d && r.hora === h).length;
+  const box = await modal({title: "Agregar · " + fmtLargo(d), ok: "Seguir", html: `<label>Horario</label><select name="h">${horas.map(h =>
+    `<option value="${h}">${h} · ${ocup(h)}/${state.cfg.capacidad}</option>`).join("")}</select>`});
+  if (box) agAgregar(box.querySelector("[name=h]").value, d);
+}
+async function accionesPersona(id) {
+  const r = resPorId(id); if (!r) return;
+  const adm = state.rol === "admin", prueba = esPrueba(r), mail = prueba ? r.mail : r.email, tel = telRes(r);
+  let act = null;
+  const bt = (k, txt, cls = "sec") => `<button class="btn ${cls}" data-m="1" data-act="${k}" style="width:100%;margin-top:8px">${txt}</button>`;
+  const box = await modal({title: nombreRes(r), ok: "", cancel: "Cerrar",
+    html: `<p class="sub">${fmtLargo(r.fecha)} · ${r.hora} hs${prueba ? " · clase de prueba" : ""}</p>
+      ${alumnoDe(r.email)?.notas ? `<div class="note" style="margin-top:8px">⚠️ ${esc(alumnoDe(r.email).notas)}</div>` : ""}
+      <div class="grid2">${bt("si", r.asistencia === true ? "✅ Presente" : "Presente", r.asistencia === true ? "" : "sec")}${bt("no", r.asistencia === false ? "❌ Ausente" : "Ausente", r.asistencia === false ? "bad" : "sec")}</div>
+      ${bt("pago", r.pago ? "💵 Efectivo: " + plata(r.pago.monto) : "💵 Registrar efectivo")}
+      ${mail ? bt("ficha", "📋 Ficha médica") : ""}
+      ${bt("mover", "Mover turno")}
+      ${adm && prueba && tel ? bt("wa", "WhatsApp") : ""}
+      ${adm && prueba && !yaEsAlumno(r) ? bt("alta", "Dar de alta como alumna") : ""}
+      ${adm ? bt("quitar", "Quitar del turno", "bad") : ""}`,
+    onOpen: b => b.querySelectorAll("[data-act]").forEach(x => x.addEventListener("click", () => { act = x.dataset.act; }))});
+  if (!box || !act) return;
+  if (act === "si" || act === "no") return marcarAsistencia(id, act === "si");
+  if (act === "pago") return registrarPago(id);
+  if (act === "mover") return agMover(id);
+  if (act === "quitar") return quitarDelTurno(id);
+  if (act === "wa") return window.open(waLink(tel, `Hola ${(r.nombre || "").split(" ")[0]}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`), "_blank");
+  if (act === "alta") return editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota});
+  if (act === "ficha") { const f = await state.B.getFicha(mail); return modal({title: "Ficha de " + nombreRes(r), html: fichaHTML(f, mail), ok: "", cancel: "Cerrar"}); }
+}
+async function marcarAsistencia(id, v) {
+  const r = resPorId(id); if (!r) return;
+  const nuevo = r.asistencia === v ? null : v;
+  if (await run(() => state.B.setAsistencia(r, nuevo))) {
+    [state.resDia, state.resSem, state.resMes, state.resRango].forEach(arr => (arr || []).forEach(x => { if (x.id === id) { if (nuevo == null) delete x.asistencia; else x.asistencia = nuevo; } }));
+    renderAdmin();
+  }
+}
+async function quitarDelTurno(id) {
+  const r = resPorId(id); if (!r) return;
+  if (await modal({title: "¿Quitar del turno?", html: `<p>${esc(nombreRes(r))} · ${fmtCorto(r.fecha)} ${r.hora}</p>`, ok: "Quitar", danger: true}))
+    if (await run(() => state.B.cancelar(r), "Turno quitado")) { await cargarAdmin(); renderAdmin(); }
+}
 const CONCEPTOS = ["Pago 2 meses", "Pago 3 meses", "Otro"];
 async function registrarPago(id) {
-  const r = state.resDia.find(x => x.id === id); if (!r) return;
+  const r = resPorId(id); if (!r) return;
   const p = r.pago || {};
   let quitar = false;
   const box = await modal({title: "Pago en efectivo", ok: "Guardar", cancel: "Volver",
@@ -1135,9 +1288,9 @@ async function editarAlumno(email, prefill) {
   if (!a && alumnoDe(nuevo.email)) return toast("Ya existe un alumno con ese mail");
   if (await run(() => state.B.saveAlumno(nuevo), "Guardado")) { await cargarAdmin(); renderAdmin(); }
 }
-async function agAgregar(h) {
-  const f = state.agFecha;
-  const ya = state.resDia.filter(r => r.hora === h).map(r => r.email);
+async function agAgregar(h, fecha) {
+  const f = fecha || state.agFecha;
+  const ya = resPool().filter(r => r.fecha === f && r.hora === h).map(r => r.email);
   const opts = state.alumnos.filter(a => a.activo !== false && !ya.includes(a.email));
   if (!opts.length) return toast("No hay alumnos activos para agregar");
   const box = await modal({title: `Agregar a las ${h}`, html: `<p class="sub">${fmtLargo(f)}</p>
@@ -1162,7 +1315,7 @@ async function agAgregar(h) {
   if (await run(() => state.B.reservar(email, f, h, {admin: true}), "Agregado")) { await cargarAdmin(); renderAdmin(); }
 }
 async function agMover(id) {
-  const r = [...state.resDia, ...state.pruebas].find(x => x.id === id); if (!r) return;
+  const r = resPorId(id); if (!r) return;
   const box = await modal({title: "Mover turno", html: `<p><b>${esc(nombreRes(r))}</b> · ${fmtCorto(r.fecha)} ${r.hora}</p>
     <label>Nueva fecha</label><input type="date" name="f" value="${r.fecha}">
     <label>Nuevo horario</label><select name="h"></select>`, ok: "Mover",
@@ -1383,8 +1536,9 @@ document.addEventListener("click", async e => {
     case "prDia": pr.dia = el.dataset.f; renderPrueba(); break;
     case "prSlot": prElegir(el.dataset.f, el.dataset.h); break;
     case "prOtra": pr.listo = null; try { localStorage.removeItem(PRUEBA_KEY); } catch (e) {} renderPrueba(); break;
-    case "alta": { const r = [...state.resDia, ...state.pruebas].find(x => x.id === el.dataset.id); if (r) editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota}); break; }
+    case "alta": { const r = resPorId(el.dataset.id); if (r) editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota}); break; }
     case "dia": state.diaSel = el.dataset.f; renderAlumno(); break;
+    case "semAl": state.semAl = addDays(state.semAl || lunesDe(hoy()), Number(el.dataset.d)); renderAlumno(); break;
     case "slot": clickSlot(el.dataset.f, el.dataset.h); break;
     case "cambiar": state.cambiando = state.mis.find(r => r.id === el.dataset.id); state.diaSel = null; renderAlumno(); toast("Elegí el nuevo día y horario"); break;
     case "noCambiar": state.cambiando = null; renderAlumno(); break;
@@ -1398,13 +1552,12 @@ document.addEventListener("click", async e => {
     case "agMove": state.agFecha = addDays(state.agFecha, Number(el.dataset.d)); await cargarAdmin(); renderAdmin(); break;
     case "agHoy": state.agFecha = hoy(); await cargarAdmin(); renderAdmin(); break;
     case "refresh": await cargarAdmin(); renderAdmin(); toast("Actualizado"); break;
-    case "agAdd": agAgregar(el.dataset.h); break;
+    case "agAdd": agAgregar(el.dataset.h, el.dataset.f); break;
+    case "vista": state.vista = el.dataset.v; renderAdmin(); break;
+    case "agAddDia": agregarEnDia(el.dataset.f); break;
+    case "persona": accionesPersona(el.dataset.id); break;
     case "agMover": agMover(el.dataset.id); break;
-    case "agDel": {
-      const r = state.resDia.find(x => x.id === el.dataset.id); if (!r) return;
-      if (await modal({title: "¿Quitar del turno?", html: `<p>${esc(nombreRes(r))} · ${r.hora}</p>`, ok: "Quitar", danger: true}))
-        if (await run(() => B.cancelar(r), "Turno quitado")) { await cargarAdmin(); renderAdmin(); }
-      break; }
+    case "agDel": quitarDelTurno(el.dataset.id); break;
     case "pago": registrarPago(el.dataset.id); break;
     case "feriado": {
       const c = JSON.parse(JSON.stringify(state.cfg)); c.feriadosEx = {...(c.feriadosEx || {}), [el.dataset.f]: el.dataset.v};
@@ -1420,12 +1573,7 @@ document.addEventListener("click", async e => {
     case "addProfe": addProfe(); break;
     case "delProfe": if (await modal({title: "¿Quitar profe?", html: `<p>${esc(el.dataset.e)} ya no va a poder entrar al panel.</p>`, ok: "Quitar", danger: true}))
       if (await run(() => B.deleteProfe(el.dataset.e), "Profe quitada")) { await cargarAdmin(); renderAdmin(); } break;
-    case "att": {
-      const r = state.resDia.find(x => x.id === el.dataset.id); if (!r) return;
-      const v = el.dataset.v === "1"; const nuevo = r.asistencia === v ? null : v;
-      if (await run(() => B.setAsistencia(r, nuevo))) { if (nuevo == null) delete r.asistencia; else r.asistencia = nuevo;
-        const m = state.resMes.find(x => x.id === r.id); if (m) { if (nuevo == null) delete m.asistencia; else m.asistencia = nuevo; } renderAdmin(); }
-      break; }
+    case "att": marcarAsistencia(el.dataset.id, el.dataset.v === "1"); break;
     case "verDia": state.agFecha = el.dataset.f; state.tab = "agenda"; await cargarAdmin(); renderAdmin(); break;
     case "copiarLink": try { await navigator.clipboard.writeText(location.origin + location.pathname + "#prueba"); toast("Link copiado"); } catch (err) { toast("No se pudo copiar: copialo a mano"); } break;
     case "filtro": state.filtro = el.dataset.k; renderAdmin(); break;
