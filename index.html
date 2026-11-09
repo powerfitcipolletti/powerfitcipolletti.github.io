@@ -332,6 +332,11 @@ function demoBackend() {
     async misComprobantes() { return clone((S.comprobantes || []).filter(c => c.email === me.email)).map(({img, ...c}) => c); },
     async listComprobantes() { return clone((S.comprobantes || []).filter(c => c.estado === "pendiente")); },
     async resolverComprobante(id, cambios) { const c = (S.comprobantes || []).find(x => x.id === id); if (c) Object.assign(c, cambios); notify(); },
+    async listDifusiones() { return clone(S.difusiones || []).map(({destinatarios, ...x}) => ({...x, total: (destinatarios || []).length})); },
+    async crearDifusion(d) { S.difusiones = S.difusiones || []; S.difusiones.push({...clone(d), id: "d" + Date.now(), estado: "pendiente", enviados: 0}); notify(); },
+    async listPlantillas() { return clone(S.plantillas || []); },
+    async savePlantilla(t) { S.plantillas = (S.plantillas || []).filter(x => x.id !== t.id); S.plantillas.push({...clone(t), id: t.id || "p" + Date.now()}); notify(); },
+    async deletePlantilla(id) { S.plantillas = (S.plantillas || []).filter(x => x.id !== id); notify(); },
     async vincularMp(id, email) { const m = (S.mp || []).find(x => x.id === id); if (m) m.alumno = email; const a = S.alumnos.find(x => x.email === email); if (a) a.mpSuscripcion = id; notify(); },
     async listBloqueos() { return clone(S.bloqueos); },
     async saveBloqueo(b) { b.id = b.id || b.fecha + "_" + (b.desde || "todo").replace(":", ""); S.bloqueos = S.bloqueos.filter(x => x.id !== b.id); S.bloqueos.push(clone(b)); notify(); },
@@ -499,6 +504,15 @@ async function firebaseBackend() {
       catch (e) { console.warn(e); return []; }
     },
     async resolverComprobante(id, cambios) { await updateDoc(doc(db, "comprobantes", id), cambios); },
+    // Mails masivos: la app los deja en "difusiones" y el programa de avisos los manda desde el Gmail del gimnasio
+    async listDifusiones() {
+      try { return (await getDocs(collection(db, "difusiones"))).docs.map(d => { const {creado, destinatarios, ...x} = d.data(); return {id: d.id, total: (destinatarios || []).length, ...x}; }); }
+      catch (e) { console.warn(e); return []; }
+    },
+    async crearDifusion(d) { await setDoc(doc(collection(db, "difusiones")), {...d, estado: "pendiente", enviados: 0, creado: serverTimestamp(), por: me.email}); },
+    async listPlantillas() { try { return (await getDocs(collection(db, "plantillas"))).docs.map(d => ({id: d.id, ...d.data()})); } catch (e) { console.warn(e); return []; } },
+    async savePlantilla(t) { const {id, ...x} = t; await setDoc(id ? doc(db, "plantillas", id) : doc(collection(db, "plantillas")), x); },
+    async deletePlantilla(id) { await deleteDoc(doc(db, "plantillas", id)); },
     async vincularMp(id, email, antes) {
       await updateDoc(doc(db, "mp", id), {alumno: email});
       if (antes && antes !== email) await setDoc(doc(db, "alumnos", antes), {mpSuscripcion: deleteField()}, {merge: true});
@@ -925,7 +939,8 @@ async function cargarAdmin() {
   state.pruebas = pru.filter(esPrueba).sort((a, b) => a.inicio - b.inicio);
   state.alumnos = al.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
   state.resDia = dia; state.resMes = mes; state.bloqueos = bl;
-  if (state.rol === "admin") [state.profesList, state.mp, state.comps] = await Promise.all([state.B.listProfes(), state.B.listMp(), state.B.listComprobantes()]);
+  if (state.rol === "admin") [state.profesList, state.mp, state.comps, state.difus, state.plantillas] = await Promise.all([
+    state.B.listProfes(), state.B.listMp(), state.B.listComprobantes(), state.B.listDifusiones(), state.B.listPlantillas()]);
 }
 const alumnoDe = email => state.alumnos.find(a => a.email === email);
 const nombreDe = email => alumnoDe(email)?.nombre || email;
@@ -936,8 +951,8 @@ const yaEsAlumno = r => r.telefono && state.alumnos.some(a => digitos(a.telefono
 function renderAdmin() {
   const esAdm = state.rol === "admin";
   if (!esAdm) state.tab = "agenda";
-  const tabs = [["agenda","Agenda"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
-  const body = {agenda: vAgenda, pruebas: vPruebas, alumnos: vAlumnos, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
+  const tabs = [["agenda","Agenda"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos"],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
+  const body = {agenda: vAgenda, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
   $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
     ${!esAdm ? "" : `<div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${state.tab === k ? "sel" : ""}" data-a="tab" data-t="${k}">${l}</button>`).join("")}</div>`}
     ${body}</div>`;
@@ -1168,6 +1183,82 @@ async function agMover(id) {
   if (!esAdm && slotsDelDia(state.cfg, f).indexOf(h) < 0) return toast("Ese horario no está disponible");
   if (await run(() => state.B.cambiar(r, f, h, {admin: esAdm, cap: state.cfg.capacidad}), "Turno movido")) { await cargarAdmin(); renderAdmin(); }
 }
+/* ---------- Mails masivos ---------- */
+const PLANTILLAS_BASE = [
+  {id: "base1", nombre: "Aviso general", asunto: "Novedades de PowerFit", cuerpo: "¡Hola {nombre}!\n\nTe escribimos para contarte que...\n\n¡Te esperamos!"},
+  {id: "base2", nombre: "Día cerrado / feriado", asunto: "El [día] no abrimos", cuerpo: "¡Hola {nombre}!\n\nTe avisamos que el [día] el gimnasio va a estar cerrado por [motivo].\n\nSi tenías turno ese día, entrá a la app y elegí otro horario. Cualquier duda, escribinos.\n\n¡Gracias!"},
+  {id: "base3", nombre: "Promo", asunto: "Una promo para vos", cuerpo: "¡Hola {nombre}!\n\nEste mes tenemos una promo especial: [contá la promo].\n\nVale hasta el [fecha]. Escribinos por WhatsApp para aprovecharla."},
+  {id: "base4", nombre: "Recordatorio de pago", asunto: "Tu plan de PowerFit", cuerpo: "¡Hola {nombre}!\n\nTe recordamos que tu plan está por vencer. Podés pagar por transferencia y subir el comprobante en la app, o abonar en el gimnasio.\n\n¡Gracias!"}
+];
+const GRUPOS = [["activas", "Todas las alumnas activas"], ["todas", "Todas (también inactivas)"], ["1x", "Plan 1 vez por semana"], ["2x", "Plan 2 veces por semana"],
+  ["3x", "Plan 3 veces por semana"], ["pronto", "Vencen en los próximos 7 días"], ["vencido", "Plan vencido"], ["inactivo", "Inactivas"]];
+const esMailOk = m => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(m || ""));
+function destinatariosDe(g) {
+  return state.alumnos.filter(a => esMailOk(a.email) && (
+    g === "todas" ? true : g === "activas" ? a.activo !== false : g === "inactivo" ? a.activo === false
+    : g === "pronto" || g === "vencido" ? estadoVence(a).k === g : a.activo !== false && a.plan === g));
+}
+function todasPlantillas() { return [...PLANTILLAS_BASE, ...(state.plantillas || [])]; }
+function vMails() {
+  const d = state.mailDraft || (state.mailDraft = {asunto: PLANTILLAS_BASE[0].asunto, cuerpo: PLANTILLAS_BASE[0].cuerpo, para: "activas", boton: true});
+  const n = destinatariosDe(d.para).length;
+  const hist = (state.difus || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 10);
+  const est = x => x.estado === "enviado" ? `<span class="badge ok">Enviado a ${x.enviados}</span>`
+    : x.estado === "enviando" ? `<span class="badge warn">Enviando ${x.enviados || 0} de ${x.total}</span>` : `<span class="badge">En cola · ${x.total}</span>`;
+  return `<div class="card"><b>Nuevo mail</b>
+    <p class="sub">Sale desde el Gmail de PowerFit, con el logo, a cada alumna por separado. {nombre} se reemplaza por el nombre de cada una.</p>
+    <label>Partir de una plantilla</label>
+    <div class="row"><select id="mPl" class="grow" style="width:auto"><option value="">Elegí una plantilla…</option>${todasPlantillas().map(t => `<option value="${esc(t.id)}">${esc(t.nombre)}</option>`).join("")}</select></div>
+    <label>Para</label><select id="mPara">${GRUPOS.map(([k, l]) => `<option value="${k}" ${d.para === k ? "selected" : ""}>${l}</option>`).join("")}</select>
+    <p class="small muted" style="margin-top:4px">Le llega a <b style="color:var(--text)">${n}</b> alumna${n === 1 ? "" : "s"}${n > 80 ? " · Gmail manda hasta ~100 por día: si no entran todas hoy, el resto sale mañana" : ""}</p>
+    <label>Asunto</label><input id="mAsunto" maxlength="120" value="${esc(d.asunto)}">
+    <label>Mensaje</label><textarea id="mCuerpo" style="min-height:180px">${esc(d.cuerpo)}</textarea>
+    <label class="chk"><input type="checkbox" id="mBoton" ${d.boton ? "checked" : ""}> Agregar botón "Entrar a la app"</label>
+    <div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn sec sm" data-a="mPrev">Ver cómo queda</button>
+      <button class="btn sec sm" data-a="mGuardarPl">Guardar como plantilla</button>
+      <button class="btn sm" data-a="mEnviar" ${n ? "" : "disabled"}>Enviar a ${n}</button></div></div>
+    ${(state.plantillas || []).length ? `<div class="card"><b>Mis plantillas</b>${state.plantillas.map(t => `<div class="person"><span class="name">${esc(t.nombre)}<div class="small muted">${esc(t.asunto)}</div></span>
+      <button class="x" data-a="mBorrarPl" data-id="${esc(t.id)}" title="Borrar">×</button></div>`).join("")}</div>` : ""}
+    <h2>Enviados</h2>
+    ${hist.length ? hist.map(x => `<div class="card row between"><div><b>${esc(x.asunto)}</b><div class="sub">${fmtFecha(x.fecha)} · ${esc((GRUPOS.find(g => g[0] === x.para) || [, ""])[1])}</div></div>${est(x)}</div>`).join("")
+      : `<div class="empty">Todavía no se mandó ningún mail</div>`}`;
+}
+function leerBorrador() {
+  const g = id => document.getElementById(id);
+  if (!g("mAsunto")) return state.mailDraft;
+  return state.mailDraft = {asunto: g("mAsunto").value, cuerpo: g("mCuerpo").value, para: g("mPara").value, boton: g("mBoton").checked};
+}
+const cuerpoHTML = (t, nombre) => esc(t.replace(/\{nombre\}/g, nombre)).split(/\n{2,}/).map(p => `<p style="font-size:15px;line-height:1.5">${p.replace(/\n/g, "<br>")}</p>`).join("");
+async function verPreviaMail() {
+  const d = leerBorrador(), ej = destinatariosDe(d.para)[0], nom = (ej?.nombre || "Sofía").split(" ")[0];
+  await modal({title: "Así le llega a " + (ej ? (ej.nombre || ej.email) : "cada alumna"), cancel: "", ok: "Cerrar",
+    html: `<div style="background:#07090D;color:#f3f5f9;padding:18px;border-radius:12px"><div class="small muted">Asunto: ${esc(d.asunto.replace(/\{nombre\}/g, nom))}</div>
+      <div style="font-size:22px;font-weight:900;font-style:italic;margin:10px 0 2px">⚡ POWER<span style="color:#2B7BFF">FIT</span></div>
+      <div style="font-size:10px;letter-spacing:4px;color:#8e9ab0;margin-bottom:12px">CIPOLLETTI</div>${cuerpoHTML(d.cuerpo, nom)}
+      ${d.boton ? `<p><span style="background:#1565FF;color:#fff;font-weight:bold;padding:10px 16px;border-radius:10px;display:inline-block">Entrar a la app</span></p>` : ""}
+      <p style="font-size:13px;color:#8e9ab0">Equipo PowerFit</p></div>`});
+}
+async function enviarMailMasivo() {
+  const d = leerBorrador(), lista = destinatariosDe(d.para);
+  if (!d.asunto.trim() || !d.cuerpo.trim()) return toast("Completá el asunto y el mensaje");
+  if (/\[[^\]]+\]/.test(d.asunto + d.cuerpo)) return toast("Quedó algo entre corchetes [ ] para completar");
+  if (!lista.length) return toast("No hay alumnas en ese grupo");
+  if (!await modal({title: "¿Enviar el mail?", ok: `Enviar a ${lista.length}`, html: `<p><b>${esc(d.asunto)}</b></p>
+    <p class="sub">Le llega a ${lista.length} alumna${lista.length === 1 ? "" : "s"} (${esc(GRUPOS.find(g => g[0] === d.para)[1].toLowerCase())}). Sale en los próximos 10 minutos.</p>`})) return;
+  const dif = {asunto: d.asunto.trim(), cuerpo: d.cuerpo.trim(), boton: !!d.boton, para: d.para, fecha: hoy(), ts: Date.now(),
+    destinatarios: lista.map(a => a.email + "|" + (a.nombre || "").split(" ")[0])};
+  if (await run(() => state.B.crearDifusion(dif), "Listo: sale en los próximos minutos")) {
+    state.mailDraft = null; await cargarAdmin(); renderAdmin();
+  }
+}
+async function guardarPlantilla() {
+  const d = leerBorrador();
+  const box = await modal({title: "Guardar plantilla", ok: "Guardar", html: `<label>Nombre de la plantilla</label><input name="n" placeholder="Ej: Aviso de vacaciones" value="">`});
+  if (!box) return;
+  const nombre = box.querySelector("[name=n]").value.trim();
+  if (!nombre) return toast("Ponele un nombre");
+  if (await run(() => state.B.savePlantilla({nombre, asunto: d.asunto, cuerpo: d.cuerpo}), "Plantilla guardada")) { await cargarAdmin(); renderAdmin(); }
+}
 function vBloqueos() {
   const futuros = state.bloqueos.filter(b => b.fecha >= hoy()).sort((a, b) => (a.fecha + (a.desde || "")).localeCompare(b.fecha + (b.desde || "")));
   const fer = FERIADOS.filter(x => x.fecha >= hoy());
@@ -1341,6 +1432,10 @@ document.addEventListener("click", async e => {
     case "alNuevo": editarAlumno(null); break;
     case "alEdit": editarAlumno(el.dataset.e); break;
     case "compSubir": subirComprobante(); break;
+    case "mPrev": verPreviaMail(); break;
+    case "mEnviar": enviarMailMasivo(); break;
+    case "mGuardarPl": guardarPlantilla(); break;
+    case "mBorrarPl": if (await modal({title: "¿Borrar la plantilla?", ok: "Borrar", danger: true})) { if (await run(() => B.deletePlantilla(el.dataset.id), "Plantilla borrada")) { leerBorrador(); await cargarAdmin(); renderAdmin(); } } break;
     case "compVer": verComprobante(el.dataset.id); break;
     case "compOk": aprobarComprobante(el.dataset.id); break;
     case "compNo": rechazarComprobante(el.dataset.id); break;
@@ -1359,9 +1454,13 @@ document.addEventListener("click", async e => {
 document.addEventListener("change", async e => {
   if (e.target.id === "agDate" && e.target.value) { state.agFecha = e.target.value; await cargarAdmin(); renderAdmin(); }
   if (e.target.id === "bTodo") document.getElementById("bHoras").style.display = e.target.checked ? "none" : "grid";
+  if (e.target.id === "mPl" && e.target.value) { const t = todasPlantillas().find(x => x.id === e.target.value);
+    if (t) { const d = leerBorrador(); state.mailDraft = {...d, asunto: t.asunto, cuerpo: t.cuerpo}; renderAdmin(); } }
+  if (e.target.id === "mPara" || e.target.id === "mBoton") { leerBorrador(); renderAdmin(); }
 });
 document.addEventListener("input", e => {
   if (e.target.id === "q") { state.q = e.target.value; state._focusQ = true; renderAdmin(); state._focusQ = false; }
+  if (e.target.id === "mAsunto" || e.target.id === "mCuerpo") leerBorrador(); // no se pierde lo escrito al cambiar de pestaña
 });
 // Refresca la vista del alumno cada minuto (para que los turnos pasados se actualicen)
 setInterval(() => { if (state.user && RUTA === "alumnos" && state.alumno && !$modal.classList.contains("on")) renderAlumno(); }, 60e3);
