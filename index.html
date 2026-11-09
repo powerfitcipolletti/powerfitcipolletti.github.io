@@ -70,6 +70,10 @@
   .agslot:last-child{border-bottom:none}
   .person{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--card2);border-radius:10px;padding:8px 10px;margin-top:6px}
   .person .name{flex:1 1 100%}
+  .ficha{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px;font-size:14px}
+  .ficha dt{color:var(--muted);font-size:12px;margin-top:8px}
+  .ficha dd{margin:2px 0 0}
+  .ficha .alerta{color:var(--warn);font-weight:600}
   .att{padding:6px 10px;font-size:13px;background:var(--card);color:var(--muted);border:1px solid var(--line)}
   a.att{display:inline-block;border-radius:10px;color:var(--text)}
   .att.yes{background:var(--ok);color:#111;border-color:var(--ok)}
@@ -325,7 +329,8 @@ function demoBackend() {
     async deleteAlumno(email) { S.alumnos = S.alumnos.filter(x => x.email !== email); notify(); },
     async listBloqueos() { return clone(S.bloqueos); },
     async saveBloqueo(b) { b.id = b.id || b.fecha + "_" + (b.desde || "todo").replace(":", ""); S.bloqueos = S.bloqueos.filter(x => x.id !== b.id); S.bloqueos.push(clone(b)); notify(); },
-    async deleteBloqueo(id) { S.bloqueos = S.bloqueos.filter(x => x.id !== id); notify(); }
+    async deleteBloqueo(id) { S.bloqueos = S.bloqueos.filter(x => x.id !== id); notify(); },
+    async getFicha(email) { return email === "carla.demo@gmail.com" ? {fecha: "10/10/2026", nombre: "Carla Ruiz", dni: "30111222", edad: "42", nacimiento: "02/03/1984", telefono: "2995553333", altura: "165", peso: "68", actividad: "No", objetivo: "Tonificar y bajar de peso", condiciones: "Hipertensión", detalle: "Controlada con medicación", medicacion: "Sí", cualMedicacion: "Enalapril", lesion: "No", otra: "", imagen: "Sí", consentimiento: "si", firma: "Carla Ruiz"} : null; }
   };
   return api;
 }
@@ -468,7 +473,9 @@ async function firebaseBackend() {
     async deleteAlumno(email) { await deleteDoc(doc(db, "alumnos", email)); },
     async listBloqueos() { return (await getDocs(collection(db, "bloqueos"))).docs.map(d => ({id: d.id, ...d.data()})); },
     async saveBloqueo(b) { const id = b.id || b.fecha + "_" + (b.desde || "todo").replace(":", ""); const {id: _, ...data} = b; await setDoc(doc(db, "bloqueos", id), data); },
-    async deleteBloqueo(id) { await deleteDoc(doc(db, "bloqueos", id)); }
+    async deleteBloqueo(id) { await deleteDoc(doc(db, "bloqueos", id)); },
+    // Ficha médica: la copia el programa de la planilla de respuestas del Google Form (colección "fichas", por mail)
+    async getFicha(email) { if (!email) return null; try { const s = await getDoc(doc(db, "fichas", String(email).trim().toLowerCase())); return s.exists() ? s.data() : null; } catch (e) { console.warn(e); return null; } }
   };
 }
 
@@ -797,6 +804,7 @@ function vAgenda() {
             <button class="att ${r.asistencia === true ? "yes" : ""}" data-a="att" data-id="${esc(r.id)}" data-v="1">Presente</button>
             <button class="att ${r.asistencia === false ? "no" : ""}" data-a="att" data-id="${esc(r.id)}" data-v="0">Ausente</button>
             <button class="att ${r.pago ? "yes" : ""}" data-a="pago" data-id="${esc(r.id)}">💵 Efectivo</button>
+            ${(esPrueba(r) ? r.mail : r.email) ? `<button class="att" data-a="verFicha" data-e="${esc(esPrueba(r) ? r.mail : r.email)}" data-n="${esc(nombreRes(r))}">📋 Ficha</button>` : ""}
             ${adm ? `<button class="att" data-a="agMover" data-id="${esc(r.id)}">Mover</button>
             ${esPrueba(r) && !yaEsAlumno(r) ? `<button class="att" data-a="alta" data-id="${esc(r.id)}">Dar de alta</button>` : ""}
             <button class="x" data-a="agDel" data-id="${esc(r.id)}" title="Quitar">×</button>` : ""}</div>`; }).join("")}
@@ -836,6 +844,7 @@ function vPruebas() {
       ${r.telefono ? `<a class="att" style="text-decoration:none" target="_blank" href="${waLink(r.telefono, `Hola ${esc((r.nombre||"").split(" ")[0])}! Te escribimos de PowerFit por tu clase de prueba.`)}">WhatsApp ${esc(r.telefono)}</a>` : ""}
       <button class="att" data-a="agMover" data-id="${esc(r.id)}">Mover</button>
       ${!yaEsAlumno(r) ? `<button class="att" data-a="alta" data-id="${esc(r.id)}">Dar de alta</button>` : ""}
+      ${r.mail ? `<button class="att" data-a="verFicha" data-e="${esc(r.mail)}" data-n="${esc(r.nombre || "")}">📋 Ficha</button>` : ""}
       <button class="att" data-a="verDia" data-f="${r.fecha}">Ver en agenda</button></div></div>`;
   return `<div class="note acc small">Link para clases de prueba: <b>${esc(location.origin + location.pathname)}#prueba</b><br>
       <button class="btn sec sm" style="margin-top:8px" data-a="copiarLink">Copiar link</button></div>
@@ -893,6 +902,7 @@ function formAlumno(a = {}) {
     <p class="small muted" style="margin-top:-6px">Los beneficios no se acumulan: se marca uno solo.</p>
     <label class="chk"><input type="checkbox" name="activo" ${a.activo !== false ? "checked" : ""}> Activo (puede reservar)</label>
     <label>Notas / contraindicaciones</label><textarea name="notas">${esc(a.notas)}</textarea>
+    <div id="fichaMed">${a.email ? `<p class="small muted" style="margin-top:12px">Buscando ficha médica…</p>` : ""}</div>
     ${!nuevo ? `<button class="btn bad sm" style="margin-top:12px" data-del="1">Eliminar alumno</button>` : ""}`;
 }
 async function editarAlumno(email, prefill) {
@@ -908,6 +918,8 @@ async function editarAlumno(email, prefill) {
       club.onchange = () => { if (club.checked) dra.checked = false; };
       dra.onchange = () => { if (dra.checked) club.checked = false; };
       if (!ven.value) calc(); else total();
+      const fm = b.querySelector("#fichaMed"), mailF = (a || prefill || {}).email;
+      if (fm && mailF) state.B.getFicha(mailF).then(f => { fm.innerHTML = fichaHTML(f, mailF); });
       const del = b.querySelector("[data-del]");
       if (del) del.onclick = async ev => { ev.preventDefault(); $modal.classList.remove("on");
         const ok = await modal({title: "¿Eliminar alumno?", html: `<p>Se borra la ficha de <b>${esc(a.nombre || a.email)}</b>. Sus turnos ya reservados no se borran.</p>`, ok: "Eliminar", danger: true});
@@ -1048,6 +1060,29 @@ async function saveCfg() {
   if (await run(() => state.B.saveConfig(c), "Ajustes guardados")) { state.cfg = c; renderAdmin(); }
 }
 
+/* ============================ FICHA MÉDICA ============================ */
+const vacio = v => !String(v ?? "").trim() || /^(no|ninguna|ninguno|nada|-|n\/a)\.?$/i.test(String(v).trim());
+function fichaHTML(f, mail) {
+  if (!f) return `<div class="ficha"><b>📋 Ficha médica</b><p class="small muted" style="margin-top:6px">No encontramos una ficha completada con <b>${esc(mail)}</b>. Puede que haya usado otro mail en el formulario.</p></div>`;
+  const fila = (t, v, alerta) => v == null || String(v).trim() === "" ? "" : `<dt>${t}</dt><dd class="${alerta ? "alerta" : ""}">${esc(v)}</dd>`;
+  const cond = [f.condiciones, f.detalle].filter(x => !vacio(x)).join(" · ");
+  const med = String(f.medicacion || "").trim().toLowerCase().startsWith("s") ? (f.cualMedicacion || "Sí") : (vacio(f.cualMedicacion) ? "No" : f.cualMedicacion);
+  return `<div class="ficha"><b>📋 Ficha médica</b> <span class="small muted">· completada el ${esc(f.fecha || "—")}</span><dl>
+    ${fila("Condiciones médicas", cond || "Ninguna", !!cond)}
+    ${fila("Medicación", med, !vacio(med))}
+    ${fila("Lesión o dolor actual", vacio(f.lesion) ? "No" : f.lesion, !vacio(f.lesion))}
+    ${vacio(f.otra) ? "" : fila("Algo más que debamos saber", f.otra, true)}
+    ${fila("Objetivo", f.objetivo)}
+    ${fila("Hace actividad física", f.actividad)}
+    ${fila("Edad · nacimiento", [f.edad, f.nacimiento].filter(Boolean).join(" · "))}
+    ${fila("Altura · peso", [f.altura && f.altura + " cm", f.peso && f.peso + " kg"].filter(Boolean).join(" · "))}
+    ${fila("DNI", f.dni)}
+    ${fila("Teléfono", f.telefono)}
+    ${fila("Autoriza uso de imagen", f.imagen || "Sin respuesta")}
+    ${fila("Consentimiento firmado", [f.consentimiento, f.firma].filter(Boolean).join(" · "))}
+  </dl></div>`;
+}
+
 /* ============================ EVENTOS ============================ */
 document.addEventListener("click", async e => {
   const el = e.target.closest("[data-a]"); if (!el || el.closest("#modal")) return;
@@ -1111,6 +1146,7 @@ document.addEventListener("click", async e => {
     case "addBloq": addBloqueo(); break;
     case "delBloq": if (await run(() => B.deleteBloqueo(el.dataset.id), "Bloqueo quitado")) { await cargarAdmin(); renderAdmin(); } break;
     case "saveCfg": saveCfg(); break;
+    case "verFicha": { const f = await B.getFicha(el.dataset.e); modal({title: "Ficha de " + (el.dataset.n || el.dataset.e), html: fichaHTML(f, el.dataset.e), ok: "", cancel: "Cerrar"}); break; }
   }
 });
 document.addEventListener("change", async e => {
