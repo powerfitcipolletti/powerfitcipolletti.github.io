@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#07090D">
+<title>PowerFit · Horarios de diciembre</title>
+<style>
+  :root{--bg:#07090D;--card:#121722;--line:#263042;--text:#f3f5f9;--muted:#8e9ab0;--accent:#1565FF;--accent2:#2B7BFF}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:Arial,system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.45}
+  .wrap{max-width:520px;margin:auto;padding:22px 16px 40px}
+  .logo{font-size:26px;font-weight:900;font-style:italic}.logo span{color:var(--accent2)}
+  .ci{font-size:11px;letter-spacing:4px;color:var(--muted);margin-bottom:18px}
+  p{margin:10px 0}
+  .muted{color:var(--muted);font-size:14px}
+  .ok{background:#0f2a1a;border:1px solid #1f6b3a;padding:12px;border-radius:10px;margin:12px 0}
+  table{width:100%;border-collapse:collapse;table-layout:fixed;margin:8px 0}
+  th{font-size:12px;color:var(--muted);padding:3px 0}
+  td{padding:3px}
+  td.sep{font-size:11px;letter-spacing:2px;color:var(--muted);padding:12px 3px 2px}
+  td.h{font-size:13px;text-align:right;padding-right:6px;width:46px}
+  button.c{width:100%;padding:9px 0;border-radius:8px;border:1px solid var(--line);background:var(--card);color:#c9d3e3;font-size:14px;font-weight:bold;cursor:pointer}
+  button.c.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  textarea{width:100%;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:10px;font-size:15px;font-family:inherit}
+  .btn{display:inline-block;background:var(--accent);color:#fff;border:0;font-weight:bold;padding:12px 18px;border-radius:10px;font-size:15px;cursor:pointer;text-decoration:none}
+  .btn.wa{background:#25D366;color:#0b1a10}
+  .n{padding:8px 0;border-radius:8px;text-align:center;font-size:14px;font-weight:bold;border:1px solid var(--line);color:#4a566b}
+  .r{border-top:1px solid var(--line);padding:10px 0}
+  .r div{font-size:13px;color:#c9d3e3;margin-top:4px}.r .o{color:#ffd27a}
+  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b2433;border:1px solid var(--line);padding:10px 16px;border-radius:10px;font-size:14px;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">⚡ POWER<span>FIT</span></div><div class="ci">CIPOLLETTI</div>
+  <div id="app"><p class="muted">Cargando…</p></div>
+</div>
+<div id="toast"></div>
+<script type="module">
+// Encuesta de horarios de diciembre. Se abre desde el mail: cada horario del mail trae ?t=(código de la alumna)&k=(día_hora).
+// Guarda en Firebase (colección encuestaHorarios). Con ?r= muestra los resultados a las dueñas (ingresando con Google).
+const FIREBASE_CONFIG = {apiKey: "AIzaSyA3vWtS0Y2i4o4zxqx-6hMQxt6xl7Jye_k", authDomain: "powerfit-cipolletti.firebaseapp.com",
+  projectId: "powerfit-cipolletti", appId: "1:269114250182:web:e9cbf4f12dd28ef89818c7"};
+const WHATSAPP = "5492996904735";
+const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"], CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie"];
+const HORAS = ["08:00","08:30","09:00","09:30","10:00","10:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30"];
+const base = "https://www.gstatic.com/firebasejs/10.12.2/";
+const [{initializeApp}, A, F] = await Promise.all([import(base + "firebase-app.js"), import(base + "firebase-auth.js"), import(base + "firebase-firestore.js")]);
+const app = initializeApp(FIREBASE_CONFIG), auth = A.getAuth(app), db = F.getFirestore(app);
+const $ = document.getElementById("app");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const hc = h => Number(h.slice(0, 2)) + ":" + h.slice(3);
+const etiqueta = k => DIAS[Number(k[0]) - 1] + " " + hc(k.slice(2));
+const valida = k => /^[1-5]_\d\d:\d\d$/.test(k) && HORAS.includes(k.slice(2));
+const wa = t => `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(t)}`;
+const toast = t => { const el = document.getElementById("toast"); el.textContent = t; el.style.display = "block"; clearTimeout(toast.h); toast.h = setTimeout(() => el.style.display = "none", 2200); };
+const p = new URLSearchParams(location.search);
+const sesion = () => new Promise(res => { const off = A.onAuthStateChanged(auth, async u => { if (u) { off(); res(u); } else { try { await A.signInAnonymously(auth); } catch (e) { off(); res(null); } } }); });
+
+function grilla(celda, conHora) {
+  const fila = h => `<tr>${conHora ? `<td class="h">${hc(h)}</td>` : ""}${DIAS.map((_, i) => `<td>${celda((i + 1) + "_" + h)}</td>`).join("")}</tr>`;
+  const sep = t => `<tr><td class="sep" colspan="${conHora ? 6 : 5}">${t}</td></tr>`;
+  return `<table><tr>${conHora ? "<th></th>" : ""}${CORTO.map(d => `<th>${d}</th>`).join("")}</tr>${sep("MAÑANA")}${HORAS.slice(0, 6).map(fila).join("")}${sep("TARDE")}${HORAS.slice(6).map(fila).join("")}</table>`;
+}
+
+/* ---------- respuesta de la alumna ---------- */
+async function encuesta() {
+  const t = p.get("t") || "";
+  const invalido = () => $.innerHTML = `<p>Este link no es válido. Escribinos por WhatsApp y lo vemos.</p><p><a class="btn wa" href="${wa("Hola! Quiero responder la encuesta de horarios.")}">Escribir por WhatsApp</a></p>`;
+  if (!/^[a-f0-9]{20}$/.test(t) || !(await sesion())) return invalido();
+  const ref = F.doc(db, "encuestaHorarios", t);
+  let d;
+  try { const s = await F.getDoc(ref); if (!s.exists()) return invalido(); d = s.data(); } catch (e) { console.error(e); return invalido(); }
+  const slots = Array.isArray(d.slots) ? d.slots.slice() : [];
+  const guardar = () => F.updateDoc(ref, {slots, otro: d.otro || "", actualizado: F.serverTimestamp()});
+  let aviso = "";
+  const k = p.get("k") || "";
+  if (valida(k)) {
+    if (!slots.includes(k)) { slots.push(k); try { await guardar(); aviso = `✅ Anotamos <b>${etiqueta(k)}</b>.`; } catch (e) { console.error(e); aviso = "No se pudo guardar. Probá de nuevo en un rato."; } }
+    else aviso = `✅ <b>${etiqueta(k)}</b> ya estaba anotado.`;
+  }
+  history.replaceState(null, "", location.pathname + "?t=" + t);
+  const nombre = String(d.nombre || "").split(" ")[0];
+  const pintar = () => {
+    $.innerHTML = `${aviso ? `<div class="ok">${aviso}</div>` : ""}
+      <p>¡Hola ${esc(nombre)}! ${slots.length ? "Estos son los horarios que marcaste (en azul). Tocá otro para sumarlo, o uno azul para sacarlo." : "Tocá los días y horarios exactos en los que podés venir (todos los que quieras)."}</p>
+      <p class="muted">Lo que tocás se guarda solo.</p>
+      ${grilla(key => `<button class="c ${slots.includes(key) ? "on" : ""}" data-k="${key}">${slots.includes(key) ? "✓ " : ""}${hc(key.slice(2))}</button>`, false)}
+      <p style="margin-top:20px"><b>¿Necesitás otro horario que no está?</b> Contanos cuál:</p>
+      <textarea id="otro" rows="3" maxlength="500" placeholder="Ej: martes y jueves a las 7:30, o sábados a la mañana">${esc(d.otro || "")}</textarea>
+      <p><button class="btn" id="gOtro">Guardar</button></p>
+      <p class="muted">Podés cerrar esta página cuando termines. ¡Gracias!</p>`;
+    if (p.get("o")) setTimeout(() => document.getElementById("otro").focus(), 100);
+  };
+  pintar();
+  $.addEventListener("click", async e => {
+    const b = e.target.closest("button.c");
+    if (b) {
+      const key = b.dataset.k, i = slots.indexOf(key);
+      if (i < 0) slots.push(key); else slots.splice(i, 1);
+      aviso = ""; const txt = document.getElementById("otro").value; d.otro = txt; pintar();
+      try { await guardar(); toast(i < 0 ? "Anotado: " + etiqueta(key) : "Sacado: " + etiqueta(key)); }
+      catch (err) { console.error(err); toast("No se pudo guardar. Probá de nuevo."); }
+      return;
+    }
+    if (e.target.id === "gOtro") {
+      d.otro = document.getElementById("otro").value.trim().slice(0, 500);
+      try { await guardar(); aviso = "✅ ¡Gracias! Guardamos lo que nos contaste."; pintar(); window.scrollTo(0, 0); }
+      catch (err) { console.error(err); toast("No se pudo guardar. Probá de nuevo."); }
+    }
+  });
+}
+
+/* ---------- resultados (solo dueñas) ---------- */
+async function resultados() {
+  const u = await new Promise(res => { const off = A.onAuthStateChanged(auth, x => { off(); res(x); }); });
+  if (!u || u.isAnonymous) {
+    $.innerHTML = `<p><b>Resultados de la encuesta de horarios</b></p><p class="muted">Solo para las dueñas: ingresá con tu cuenta de Google.</p><p><button class="btn" id="login">Ingresar con Google</button></p>`;
+    document.getElementById("login").onclick = async () => {
+      const pr = new A.GoogleAuthProvider(); pr.setCustomParameters({prompt: "select_account"});
+      try { await A.signInWithPopup(auth, pr); location.reload(); } catch (e) { if (e.code !== "auth/popup-closed-by-user") await A.signInWithRedirect(auth, pr); }
+    };
+    return;
+  }
+  let rs;
+  try { rs = (await F.getDocs(F.collection(db, "encuestaHorarios"))).docs.map(x => x.data()).filter(x => x.enviado === "si"); }
+  catch (e) { $.innerHTML = `<p>La cuenta <b>${esc(u.email)}</b> no puede ver los resultados.</p><p><button class="btn" id="salir">Usar otra cuenta</button></p>`;
+    document.getElementById("salir").onclick = async () => { await A.signOut(auth); location.reload(); }; return; }
+  const resp = rs.filter(x => (x.slots || []).length || x.otro), cuenta = {};
+  resp.forEach(x => (x.slots || []).forEach(k => cuenta[k] = (cuenta[k] || 0) + 1));
+  const max = Math.max(1, ...Object.values(cuenta));
+  const top = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a]).slice(0, 8);
+  const faltan = rs.filter(x => !resp.includes(x)).map(x => esc(x.nombre || x.email)).sort();
+  $.innerHTML = `<p><b>Respondieron ${resp.length} de ${rs.length}</b></p>
+    <p class="muted">Cuántas personas marcaron cada día y horario (más azul = más votos):</p>
+    ${grilla(k => { const n = cuenta[k] || 0; return `<div class="n" style="${n ? `background:rgba(21,101,255,${(0.25 + 0.75 * n / max).toFixed(2)});color:#fff` : ""}">${n}</div>`; }, true)}
+    ${top.length ? `<p style="margin-top:18px"><b>Los más pedidos</b><br>${top.map(k => `${etiqueta(k)} hs · <b>${cuenta[k]}</b>`).join("<br>")}</p>` : ""}
+    <p style="margin-top:18px"><b>Respuestas</b></p>
+    ${resp.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))).map(x => `<div class="r"><b>${esc(x.nombre || x.email)}</b>
+      <div>${(x.slots || []).slice().sort().map(etiqueta).join(" · ") || "Sin horarios marcados"}</div>${x.otro ? `<div class="o">Otro horario: ${esc(x.otro)}</div>` : ""}</div>`).join("") || `<p class="muted">Todavía no respondió nadie.</p>`}
+    ${faltan.length ? `<p class="muted" style="margin-top:16px">Todavía no respondieron (${faltan.length}): ${faltan.join(", ")}</p>` : ""}`;
+}
+
+if (p.has("r")) resultados(); else encuesta();
+</script>
+</body>
+</html>
