@@ -327,6 +327,7 @@ function demoBackend() {
       listeners.add(f); f(); return () => listeners.delete(f);
     },
     async misReservas() { return clone(S.reservas.filter(r => r.email === me.email)); },
+    async reservasDe(email) { return clone(S.reservas.filter(r => r.email === email)); },
     async reservasRango(d, h) { return clone(S.reservas.filter(r => r.fecha >= d && r.fecha <= h)); },
     async reservar(email, fecha, hora, o = {}) {
       const sid = slotId(fecha, hora), id = sid + "_" + email;
@@ -467,6 +468,11 @@ async function firebaseBackend() {
     },
     async misReservas() {
       const s = await getDocs(query(collection(db, "reservas"), where("email", "==", me.email)));
+      return s.docs.map(d => plain(d.id, d.data()));
+    },
+    // Todas las reservas de una alumna (pasadas y futuras), para el historial del panel de dueñas
+    async reservasDe(email) {
+      const s = await getDocs(query(collection(db, "reservas"), where("email", "==", email)));
       return s.docs.map(d => plain(d.id, d.data()));
     },
     async reservasRango(d, h) {
@@ -1229,7 +1235,29 @@ function vAlumnos() {
         ${a.mpSuscripcion ? `<div class="sub">💳 Débito Mercado Pago${a.mpUltimoPago ? " · último cobro " + fmtFecha(a.mpUltimoPago) : ""}${a.mpEstado === "rechazado" ? ` <span class="badge bad">Cobro rechazado</span>` : ""}</div>` : ""}
         ${cupoMes(a) && a.activo !== false ? (() => { const c = cicloDe(a, hoy()); return `<div class="sub">Cupo del ${fmtDM(c.desde)} al ${fmtDM(c.hasta)}: ${enCiclo((state.resRango || []).filter(r => r.email === a.email), c)} de ${cupoMes(a)} turnos</div>`; })() : ""}
         <div class="sub">${nombreMes(ym)}: ${s.usadas} turnos · presente ${s.vino} · ausente ${s.falto}</div>
-        ${a.notas ? `<div class="small" style="margin-top:4px">⚠️ ${esc(a.notas)}</div>` : ""}</div>`; }).join("") : `<div class="empty">No hay alumnos para mostrar</div>`}`;
+        ${a.notas ? `<div class="small" style="margin-top:4px">⚠️ ${esc(a.notas)}</div>` : ""}
+        <button class="btn sec sm" style="margin-top:8px" data-a="alTurnos" data-e="${esc(a.email)}">📅 Ver sus turnos</button></div>`; }).join("") : `<div class="empty">No hay alumnos para mostrar</div>`}`;
+}
+// Historial de turnos de una alumna: los que vienen y los que ya pasaron, con asistencia y pagos en efectivo
+async function turnosAlumna(email) {
+  const a = alumnoDe(email);
+  let rs;
+  try { rs = await state.B.reservasDe(email); } catch (e) { return toast(traducirError(e)); }
+  const ahora = Date.now();
+  const prox = rs.filter(r => r.inicio >= ahora).sort((x, y) => x.inicio - y.inicio);
+  const pas = rs.filter(r => r.inicio < ahora).sort((x, y) => y.inicio - x.inicio);
+  const fila = (r, pasado) => {
+    const est = !pasado ? "" : r.asistencia === true ? `<span class="badge ok">Presente</span>` : r.asistencia === false ? `<span class="badge bad">Ausente</span>` : `<span class="badge">Sin marcar</span>`;
+    return `<div class="row between" style="padding:7px 0;border-bottom:1px solid var(--line)">
+      <span>${esc(fmtCorto(r.fecha))} · ${esc(r.hora)} hs${r.pago ? ` <span class="badge ok">💵 ${plata(r.pago.monto)}</span>` : ""}</span>${est}</div>`;
+  };
+  const vino = pas.filter(r => r.asistencia === true).length, falto = pas.filter(r => r.asistencia === false).length;
+  const html = `<p class="sub" style="margin-top:0">${esc(planNombre(a?.plan))}${a?.vence ? " · vence " + fmtFecha(a.vence) : ""}</p>
+    <h4 style="margin:14px 0 4px">Próximos (${prox.length})</h4>
+    ${prox.length ? prox.map(r => fila(r, false)).join("") : `<p class="small muted">No tiene turnos agendados.</p>`}
+    <h4 style="margin:18px 0 4px">Anteriores (${pas.length})</h4>
+    ${pas.length ? `<p class="small muted" style="margin:0 0 4px">Presente ${vino} · ausente ${falto}</p>` + pas.map(r => fila(r, true)).join("") : `<p class="small muted">Todavía no tiene turnos pasados.</p>`}`;
+  modal({title: "Turnos de " + (a?.nombre || email), html, ok: "", cancel: "Cerrar"});
 }
 // Débitos de Mercado Pago que todavía no se sabe de qué alumna son: se asocian una sola vez
 function mpPendientes() {
@@ -1583,6 +1611,7 @@ document.addEventListener("click", async e => {
     case "filtro": state.filtro = el.dataset.k; renderAdmin(); break;
     case "alNuevo": editarAlumno(null); break;
     case "alEdit": editarAlumno(el.dataset.e); break;
+    case "alTurnos": turnosAlumna(el.dataset.e); break;
     case "compSubir": subirComprobante(); break;
     case "mPrev": verPreviaMail(); break;
     case "mEnviar": enviarMailMasivo(); break;
