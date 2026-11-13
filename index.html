@@ -99,6 +99,7 @@
   .ficha dt{color:var(--muted);font-size:12px;margin-top:8px}
   .ficha dd{margin:2px 0 0}
   .ficha .alerta{color:var(--warn);font-weight:600}
+  .alf{display:inline-block;vertical-align:-2px;margin-left:5px;flex:none}
   .att{padding:6px 10px;font-size:13px;background:var(--card);color:var(--muted);border:1px solid var(--line)}
   a.att{display:inline-block;border-radius:10px;color:var(--text)}
   .att.yes{background:var(--ok);color:#111;border-color:var(--ok)}
@@ -1080,7 +1081,7 @@ function vAgenda() {
           ${blk ? `<span class="badge warn">bloqueado</span>` : ""}${fuera ? `<span class="badge">fuera de horario</span>` : ""}</div>
         <div class="row">${!blk ? `<button class="btn sec sm" data-a="agAdd" data-h="${h}">+ Agregar</button>` : ""}</div></div>
         ${rs.map(r => { const a = esPrueba(r) ? null : alumnoDe(r.email);
-          return `<div class="person"><span class="name">${esc(nombreRes(r))}${esPrueba(r) ? ` <span class="badge prueba">PRUEBA</span>` : ""}${r.pago ? ` <span class="badge ok">💵 ${plata(r.pago.monto)}</span>` : ""}
+          return `<div class="person"><span class="name">${esc(nombreRes(r))}${alertaFicha(esPrueba(r) ? r.mail : r.email)}${esPrueba(r) ? ` <span class="badge prueba">PRUEBA</span>` : ""}${r.pago ? ` <span class="badge ok">💵 ${plata(r.pago.monto)}</span>` : ""}
               ${a?.notas ? `<div class="small" style="color:var(--warn);margin-top:2px">⚠️ ${esc(a.notas)}</div>` : ""}</span>
             ${esPrueba(r) && r.telefono && adm ? `<a class="att" style="text-decoration:none" target="_blank" href="${waLink(r.telefono, `Hola ${esc((r.nombre||"").split(" ")[0])}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`)}">WhatsApp</a>` : ""}
             <button class="att ${r.asistencia === true ? "yes" : ""}" data-a="att" data-id="${esc(r.id)}" data-v="1">Presente</button>
@@ -1145,7 +1146,7 @@ function personaFila(r) {
     sub = (cupo && n ? `${n}/${cupo} · ` : "") + (v ? `${v} ${v === 1 ? "vez" : "veces"}/sem` : ""); }
   const est = (r.asistencia === true ? "✅" : r.asistencia === false ? "❌" : "") + (r.pago ? "💵" : "");
   return `<button class="pp" data-a="persona" data-id="${esc(r.id)}"><span class="av ${prueba ? "pr" : ""}">${esc(ini)}</span>
-    <span class="nm"><b>${esc(nom)}</b><small>${sub}</small>${a?.notas ? `<small style="color:var(--warn)">⚠️ ${esc(a.notas)}</small>` : ""}</span><span>${est}</span></button>`;
+    <span class="nm"><b>${esc(nom)}${alertaFicha(prueba ? r.mail : r.email)}</b><small>${sub}</small>${a?.notas ? `<small style="color:var(--warn)">⚠️ ${esc(a.notas)}</small>` : ""}</span><span>${est}</span></button>`;
 }
 async function agregarEnDia(d) {
   const horas = slotsDelDia(state.cfg, d).filter(h => !bloqueo(d, h) && inicioMs(d, h) > Date.now() - 36e5);
@@ -1178,7 +1179,7 @@ async function accionesPersona(id) {
   if (act === "quitar") return quitarDelTurno(id);
   if (act === "wa") return window.open(waLink(tel, `Hola ${(r.nombre || "").split(" ")[0]}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`), "_blank");
   if (act === "alta") return editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota});
-  if (act === "ficha") { const f = await state.B.getFicha(mail); return modal({title: "Ficha de " + nombreRes(r), html: fichaHTML(f, mail), ok: "", cancel: "Cerrar"}); }
+  if (act === "ficha") { const f = await fichaDe(mail); return modal({title: "Ficha de " + nombreRes(r), html: fichaHTML(f, mail), ok: "", cancel: "Cerrar"}); }
 }
 async function marcarAsistencia(id, v) {
   const r = resPorId(id); if (!r) return;
@@ -1266,7 +1267,7 @@ function vAlumnos() {
     ${compPendientes()}
     ${mpPendientes()}
     ${list.length ? list.map(a => { const s = statsAlumno(a.email), e = estadoVence(a);
-      return `<div class="card" data-a="alEdit" data-e="${esc(a.email)}" style="cursor:pointer"><div class="row between"><b>${esc(a.nombre || a.email)}</b>${e.html}</div>
+      return `<div class="card" data-a="alEdit" data-e="${esc(a.email)}" style="cursor:pointer"><div class="row between"><b>${esc(a.nombre || a.email)}${alertaFicha(a.email)}</b>${e.html}</div>
         <div class="sub">${esc(planNombre(a.plan))} · ${esc(pagoNombre(a.pago))}${a.socioClub ? " · Socio Club Cipolletti" : ""}${a.pacienteDra ? " · Paciente Dra. González" : ""}</div>
         <div class="sub">${esc(a.email)}</div>
         ${a.mpSuscripcion ? `<div class="sub">💳 Débito Mercado Pago${a.mpUltimoPago ? " · último cobro " + fmtFecha(a.mpUltimoPago) : ""}${a.mpEstado === "rechazado" ? ` <span class="badge bad">Cobro rechazado</span>` : ""}</div>` : ""}
@@ -1346,7 +1347,7 @@ async function editarAlumno(email, prefill) {
       dra.onchange = () => { if (dra.checked) club.checked = false; };
       if (!ven.value) calc(); else total();
       const fm = b.querySelector("#fichaMed"), mailF = (a || prefill || {}).email;
-      if (fm && mailF) state.B.getFicha(mailF).then(f => { fm.innerHTML = fichaHTML(f, mailF); });
+      if (fm && mailF) fichaDe(mailF).then(f => { fm.innerHTML = fichaHTML(f, mailF); });
       const del = b.querySelector("[data-del]");
       if (del) del.onclick = async ev => { ev.preventDefault(); $modal.classList.remove("on");
         const ok = await modal({title: "¿Eliminar alumno?", html: `<p>Se borra la ficha de <b>${esc(a.nombre || a.email)}</b>. Sus turnos ya reservados no se borran.</p>`, ok: "Eliminar", danger: true});
@@ -1572,6 +1573,40 @@ async function saveCfg() {
 
 /* ============================ FICHA MÉDICA ============================ */
 const vacio = v => !String(v ?? "").trim() || /^(no|ninguna|ninguno|nada|-|n\/a)\.?$/i.test(String(v).trim());
+/* ---------- Alerta de la ficha médica en agenda y alumnos (dueñas y profes) ---------- */
+// Rojo: marcó alguna condición médica. Naranja: toma medicación, tiene una lesión o dolor, o dejó otra aclaración.
+const nivelFicha = f => {
+  if (!f) return null;
+  if (!vacio(f.condiciones) || !vacio(f.detalle)) return "rojo";
+  const med = String(f.medicacion || "").trim().toLowerCase().startsWith("s") || !vacio(f.cualMedicacion);
+  return med || !vacio(f.lesion) || !vacio(f.otra) ? "naranja" : null;
+};
+async function fichaDe(email) {
+  const f = await state.B.getFicha(email);
+  if (f) return f;
+  const viejo = alumnoDe(email)?.mailSiguefit; // si cambió de mail, la ficha puede estar con el anterior
+  return viejo ? state.B.getFicha(viejo) : null;
+}
+let fichasPend = null;
+function alertaFicha(email) {
+  if (!email) return "";
+  email = String(email).trim().toLowerCase();
+  state.fichas = state.fichas || {};
+  if (!(email in state.fichas)) {
+    state.fichas[email] = undefined;
+    if (!fichasPend) { fichasPend = new Set(); setTimeout(async () => {
+      const lista = [...fichasPend]; fichasPend = null;
+      await Promise.all(lista.map(async m => { try { state.fichas[m] = nivelFicha(await fichaDe(m)); } catch (e) { state.fichas[m] = null; } }));
+      if (lista.some(m => state.fichas[m]) && RUTA !== "alumnos" && !$modal.classList.contains("on")) renderAdmin();
+    }, 0); }
+    fichasPend.add(email);
+    return "";
+  }
+  const n = state.fichas[email];
+  if (!n) return "";
+  const col = n === "rojo" ? "#ff3b30" : "#ff9500", tit = n === "rojo" ? "Ficha médica: tiene una condición médica (revisar antes de la clase)" : "Ficha médica: medicación, lesión u otra aclaración";
+  return `<svg class="alf" width="16" height="16" viewBox="0 0 24 24" aria-label="${tit}"><title>${tit}</title><path fill="${col}" d="M12 2.5 1.5 21h21L12 2.5z"/><path fill="#fff" d="M11 9h2v6h-2zm0 7.5h2v2h-2z"/></svg>`;
+}
 function fichaHTML(f, mail) {
   if (!f) return `<div class="ficha"><b>📋 Ficha médica</b><p class="small muted" style="margin-top:6px">No encontramos una ficha completada con <b>${esc(mail)}</b>. Puede que haya usado otro mail en el formulario.</p></div>`;
   const fila = (t, v, alerta) => v == null || String(v).trim() === "" ? "" : `<dt>${t}</dt><dd class="${alerta ? "alerta" : ""}">${esc(v)}</dd>`;
@@ -1676,7 +1711,7 @@ document.addEventListener("click", async e => {
     case "addBloq": addBloqueo(); break;
     case "delBloq": if (await run(() => B.deleteBloqueo(el.dataset.id), "Bloqueo quitado")) { await cargarAdmin(); renderAdmin(); } break;
     case "saveCfg": saveCfg(); break;
-    case "verFicha": { const f = await B.getFicha(el.dataset.e); modal({title: "Ficha de " + (el.dataset.n || el.dataset.e), html: fichaHTML(f, el.dataset.e), ok: "", cancel: "Cerrar"}); break; }
+    case "verFicha": { const f = await fichaDe(el.dataset.e); modal({title: "Ficha de " + (el.dataset.n || el.dataset.e), html: fichaHTML(f, el.dataset.e), ok: "", cancel: "Cerrar"}); break; }
   }
 });
 document.addEventListener("change", async e => {
