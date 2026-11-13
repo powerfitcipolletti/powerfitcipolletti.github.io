@@ -703,7 +703,7 @@ function renderPrueba() {
       </div><p class="center"><button class="link" data-a="prOtra">Reservar para otra persona</button></p></div>`;
     return;
   }
-  const dias = diasReservables();
+  const dias = diasReservables().filter(d => (dow(d) !== 0 && dow(d) !== 6) || slotsDelDia(cfg, d).length); // sin sábados ni domingos
   const libre = (f, h) => { const n = state.turnos[slotId(f, h)] || 0; return n < cfg.capacidad && !bloqueo(f, h) && inicioMs(f, h) - ahora >= minAnt; };
   if (!pr.dia || !dias.includes(pr.dia)) pr.dia = dias.find(f => !diaBloqueado(f) && slotsDelDia(cfg, f).some(h => libre(f, h))) || dias[0];
   const f = pr.dia, slots = slotsDelDia(cfg, f);
@@ -938,7 +938,7 @@ function semanaAlumna(al, camb) {
   const cfg = state.cfg, ahora = Date.now(), dias = diasReservables(), ult = dias[dias.length - 1];
   if (!state.semAl) state.semAl = lunesDe(hoy());
   const lun = state.semAl, exc = camb?.id;
-  const semDias = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(lun, i)).filter(d => d >= hoy() && d <= ult && (dow(d) !== 0 || slotsDelDia(cfg, d).length));
+  const semDias = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(lun, i)).filter(d => d >= hoy() && d <= ult && ((dow(d) !== 0 && dow(d) !== 6) || slotsDelDia(cfg, d).length)); // sin sábados ni domingos, salvo que tengan horarios
   const col = d => {
     const slots = slotsDelDia(cfg, d), dB = diaBloqueado(d);
     const motivo = slots.length && !dB ? (() => { const t = validarReserva(al, state.mis, d, "23:59", exc); return t && !/pasó/.test(t) ? t : null; })() : null;
@@ -1066,7 +1066,7 @@ function rangoSemana(lun) {
 }
 function vAgendaSemana() {
   const cfg = state.cfg, lun = lunesDe(state.agFecha), adm = state.rol === "admin", rsem = state.resSem || [];
-  const dias = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(lun, i)).filter(d => dow(d) !== 0 || slotsDelDia(cfg, d).length || rsem.some(r => r.fecha === d));
+  const dias = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(lun, i)).filter(d => (dow(d) !== 0 && dow(d) !== 6) || slotsDelDia(cfg, d).length || rsem.some(r => r.fecha === d)); // sin sábados ni domingos, salvo que tengan horarios o turnos
   const pres = rsem.filter(r => r.asistencia === true).length, aus = rsem.filter(r => r.asistencia === false).length;
   const ef = rsem.reduce((t, r) => t + (Number(r.pago?.monto) || 0), 0);
   return `<div class="card"><div class="row between" style="flex-wrap:wrap;gap:8px">
@@ -1092,7 +1092,10 @@ function colDia(d, rs, adm) {
 }
 function bloqueSlot(d, h, rs, adm) {
   const cfg = state.cfg, blk = bloqueo(d, h), pasado = inicioMs(d, h) < Date.now() - 864e5;
-  if (!rs.length) return ""; // los horarios vacíos no se muestran (se agrega con el + del día)
+  // Horario sin reservas: se muestra como libre, para ver qué turnos no se tomaron
+  if (!rs.length) { const futuro = inicioMs(d, h) > Date.now();
+    return `<div class="blq"><div class="blqh" style="background:transparent;color:var(--muted)"><div><b style="color:var(--text)">${h}</b>${blk ? "No disponible" : futuro ? "Libre" : "Sin reservas"}</div>
+      <div class="row" style="gap:8px"><span>0/${cfg.capacidad}</span>${adm && !blk && futuro ? `<button class="mas" style="color:var(--text);border-color:var(--text)" data-a="agAdd" data-f="${d}" data-h="${h}" title="Agregar">+</button>` : ""}</div></div></div>`; }
   return `<div class="blq"><div class="blqh"><div><b>${h}</b>Electrofitness<div class="small" style="opacity:.7">${cfg.duracion} min</div></div>
       <div class="row" style="gap:8px"><span>${rs.length}/${cfg.capacidad}</span>${adm && !blk && rs.length < cfg.capacidad ? `<button class="mas" data-a="agAdd" data-f="${d}" data-h="${h}" title="Agregar">+</button>` : ""}</div></div>
     ${rs.map(personaFila).join("")}</div>`;
