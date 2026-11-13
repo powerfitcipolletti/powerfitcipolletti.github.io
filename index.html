@@ -791,8 +791,11 @@ function arrancarPrueba() {
 }
 
 /* ============================ VISTA ALUMNO ============================ */
+// Alumnas marcadas "sin restricciones" (dueños/staff): reservan, cambian y cancelan en cualquier momento, hasta que termina la clase
+const libreAl = al => !!al?.sinRestricciones;
 function validarReserva(al, mis, f, h, excluirId) {
   if (!al) return "No estás dado de alta";
+  if (libreAl(al)) return inicioMs(f, h) + (Number(state.cfg.duracion) || 20) * 60e3 <= Date.now() ? "Ese horario ya pasó" : null;
   if (!al.activo) return "Tu cuenta está pausada. Escribinos por WhatsApp.";
   if (al.vence && f > al.vence) return `Tu plan vence el ${fmtFecha(al.vence)}. Escribinos para renovarlo.`;
   if (inicioMs(f, h) <= Date.now()) return "Ese horario ya pasó";
@@ -813,7 +816,7 @@ function validarReserva(al, mis, f, h, excluirId) {
   }
   return null;
 }
-const puedeModificar = r => r.inicio - Date.now() >= state.cfg.cancelMin * 60e3;
+const puedeModificar = r => (libreAl(state.alumno) && r.inicio + (Number(state.cfg.duracion) || 20) * 60e3 > Date.now()) || r.inicio - Date.now() >= state.cfg.cancelMin * 60e3;
 function diasReservables() {
   const out = []; for (let i = 0; i <= state.cfg.diasAnticipacion; i++) out.push(addDays(hoy(), i)); return out;
 }
@@ -977,7 +980,7 @@ function semanaAlumna(al, camb) {
       ${motivo ? `<div class="small" style="color:var(--warn);margin-top:4px">${esc(motivo)}</div>` : ""}
       ${slots.map(h => {
         const sid = slotId(d, h), n = state.turnos[sid] || 0, libres = cfg.capacidad - n;
-        const mine = state.mis.some(r => r.slot === sid), past = inicioMs(d, h) <= ahora, blk = bloqueo(d, h);
+        const mine = state.mis.some(r => r.slot === sid), past = inicioMs(d, h) + (libreAl(al) ? (Number(cfg.duracion) || 20) * 60e3 : 0) <= ahora, blk = bloqueo(d, h);
         const cls = mine ? "mine" : past ? "past" : blk ? "blk" : libres <= 0 ? "full" : "";
         const txt = mine ? "Tu turno" : past ? "—" : blk ? "No disp." : libres <= 0 ? "Completo" : `${libres} lugar${libres === 1 ? "" : "es"}`;
         return `<button class="slot ${cls}" data-a="slot" data-f="${d}" data-h="${h}" ${(past || blk || (libres <= 0 && !mine) || (motivo && !mine)) ? "disabled" : ""}><b>${h}</b><small>${txt}</small></button>`;
@@ -1329,6 +1332,7 @@ function formAlumno(a = {}) {
     <label class="chk"><input type="checkbox" name="pacienteDra" ${a.pacienteDra ? "checked" : ""}> Paciente de la Dra. González (10% en el primer mes)</label>
     <p class="small muted" style="margin-top:-6px">Los beneficios no se acumulan: se marca uno solo.</p>
     <label class="chk"><input type="checkbox" name="activo" ${a.activo !== false ? "checked" : ""}> Activo (puede reservar)</label>
+    <label class="chk"><input type="checkbox" name="sinRestricciones" ${a.sinRestricciones ? "checked" : ""}> Sin restricciones de horario (reserva, cambia o cancela en cualquier momento, sin límite por semana ni días seguidos)</label>
     <label>Notas / contraindicaciones</label><textarea name="notas">${esc(a.notas)}</textarea>
     <div id="fichaMed">${a.email ? `<p class="small muted" style="margin-top:12px">Buscando ficha médica…</p>` : ""}</div>
     ${!nuevo ? `<button class="btn bad sm" style="margin-top:12px" data-del="1">Eliminar alumno</button>` : ""}`;
@@ -1358,7 +1362,7 @@ async function editarAlumno(email, prefill) {
   const nuevo = {
     nombre: g("nombre").value.trim(), email: g("email").value.trim().toLowerCase(), telefono: g("telefono").value.trim(),
     plan: g("plan").value, pago: g("pago").value, inicio: g("inicio").value, vence: g("vence").value,
-    socioClub: g("socioClub").checked, pacienteDra: g("pacienteDra").checked, activo: g("activo").checked, notas: g("notas").value.trim()
+    socioClub: g("socioClub").checked, pacienteDra: g("pacienteDra").checked, activo: g("activo").checked, sinRestricciones: g("sinRestricciones").checked, notas: g("notas").value.trim()
   };
   if (!nuevo.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(nuevo.email)) return toast("Falta un mail válido");
   if (!a && alumnoDe(nuevo.email)) return toast("Ya existe un alumno con ese mail");
