@@ -346,6 +346,7 @@ function demoBackend() {
     initPrueba(c) { c(); },
     async reservarPrueba(d, cap) {
       const sid = slotId(d.fecha, d.hora);
+      if (S.alumnos.some(a => a.email === d.mail) || S.reservas.some(r => r.tipo === "prueba" && r.mail === d.mail)) throw new Error(MSG_PRUEBA_USADA);
       if (count(sid) >= cap) throw new Error("Ese horario se acaba de completar. Elegí otro.");
       S.reservas.push({id: sid + "_prueba_" + Math.random().toString(36).slice(2, 10), slot: sid, fecha: d.fecha, hora: d.hora, tipo: "prueba",
         nombre: d.nombre, mail: d.mail || "", telefono: d.telefono, nota: d.nota, inicio: inicioMs(d.fecha, d.hora)}); notify();
@@ -448,14 +449,26 @@ async function firebaseBackend() {
     },
     async reservarPrueba(d, cap) {
       const sid = slotId(d.fecha, d.hora), tRef = doc(db, "turnos", sid), rRef = doc(db, "reservas", sid + "_prueba_" + auth.currentUser.uid);
-      await runTransaction(db, async tx => {
+      const pmRef = doc(db, "pruebasMail", d.mail); // una sola clase de prueba por mail
+      try { await runTransaction(db, async tx => {
         const t = await tx.get(tRef);
+        if ((await tx.get(pmRef)).exists()) throw new Error(MSG_PRUEBA_USADA);
         const n = t.exists() ? (t.data().n || 0) : 0;
         if (n >= cap) throw new Error("Ese horario se acaba de completar. Elegí otro.");
         if (t.exists()) tx.update(tRef, {n: n + 1}); else tx.set(tRef, {n: 1, fecha: d.fecha, hora: d.hora});
+        tx.set(pmRef, {creado: serverTimestamp()});
         tx.set(rRef, {slot: sid, fecha: d.fecha, hora: d.hora, tipo: "prueba", nombre: d.nombre, mail: d.mail || "", telefono: d.telefono, nota: d.nota,
           inicio: Timestamp.fromMillis(inicioMs(d.fecha, d.hora)), creado: serverTimestamp()});
-      });
+      }); } catch (e) {
+        // Las reglas de Firebase rechazan la reserva si el mail ya es de una alumna (o ya usó su clase de prueba)
+        if (/permission|insufficient/i.test(String(e?.message || e))) throw new Error(MSG_PRUEBA_USADA);
+        throw e;
+      }
+    },
+    // Registra los mails que ya tuvieron clase de prueba (para las cargadas antes de este control)
+    async marcarPruebasUsadas(lista) {
+      const mails = [...new Set(lista.map(r => String(r.mail || "").trim().toLowerCase()).filter(m => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)))];
+      await Promise.all(mails.map(m => setDoc(doc(db, "pruebasMail", m), {creado: serverTimestamp()}, {merge: true})));
     },
     // Solo las dueñas pueden leer la lista de profes: si la lectura funciona, es dueña
     async isAdmin() { try { await getDocs(query(collection(db, "profes"), limit(1))); return true; } catch (e) { return false; } },
@@ -596,6 +609,7 @@ async function run(fn, okMsg) {
   try { await fn(); if (okMsg) toast(okMsg); return true; }
   catch (e) { console.error(e); toast(traducirError(e)); return false; }
 }
+const MSG_PRUEBA_USADA = "Este mail ya está registrado en PowerFit (como alumna o con una clase de prueba anterior). Si querés venir, escribinos por WhatsApp y lo coordinamos.";
 function traducirError(e) {
   const m = String(e?.message || e), c = e?.code || "";
   const AUTH = {"auth/invalid-credential": "Mail o contraseña incorrectos. Si es tu primera vez, tocá «Es mi primera vez».", "auth/wrong-password": "Mail o contraseña incorrectos.",
@@ -729,7 +743,7 @@ async function prElegir(f, h) {
   const box = await modal({title: "Tus datos", ok: "Reservar clase", cancel: "Volver",
     html: `<p class="sub">${fmtLargo(f)} · ${h} hs</p>
       <label>Nombre y apellido</label><input name="nombre" autocomplete="name">
-      <label>Mail (el mismo que pusiste en tu ficha)</label><input name="mail" type="email" inputmode="email" autocomplete="email" placeholder="nombre@gmail.com">
+      <label>Mail</label><input name="mail" type="email" inputmode="email" autocomplete="email" placeholder="nombre@gmail.com">
       <label>WhatsApp</label><input name="tel" inputmode="tel" autocomplete="tel" placeholder="299 …">
       <label>¿Cómo nos conociste?</label><select name="como"><option value="">Elegí una opción</option><option>Instagram</option><option>Me lo recomendaron</option><option>Club Cipolletti</option><option>Pasé por el local</option><option>Otro</option></select>
       <p class="small muted" style="margin-top:10px">Te mandamos la confirmación a tu mail.</p>`});
@@ -739,7 +753,13 @@ async function prElegir(f, h) {
   if (d.nombre.length < 2) return toast("Escribí tu nombre");
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.mail)) return toast("Revisá tu mail");
   if (d.telefono.replace(/\D/g, "").length < 8) return toast("Revisá el número de WhatsApp");
-  if (await run(() => state.B.reservarPrueba(d, state.cfg.capacidad))) {
+  let ok = true;
+  try { await state.B.reservarPrueba(d, state.cfg.capacidad); }
+  catch (e) { ok = false; console.error(e);
+    if (String(e?.message) === MSG_PRUEBA_USADA) modal({title: "Ya estás registrada", cancel: "", ok: "Entendido",
+      html: `<p>${esc(MSG_PRUEBA_USADA)}</p><p style="margin-top:12px"><a class="btn" style="width:100%" target="_blank" href="${waLink(WHATSAPP, "Hola! Quería reservar una clase de prueba pero mi mail ya figura registrado.")}">Escribir por WhatsApp</a></p>`});
+    else toast(traducirError(e)); }
+  if (ok) {
     pr.listo = d; try { localStorage.setItem(PRUEBA_KEY, JSON.stringify(d)); } catch (e) {}
     enviarConfirmacion(d);
     renderPrueba();
@@ -1000,6 +1020,7 @@ async function cargarAdmin() {
   state.resSem = sem;
   state.resRango = pru; // todas las reservas de -45 a +60 días (para contar cupos)
   state.pruebas = pru.filter(esPrueba).sort((a, b) => a.inicio - b.inicio);
+  if (state.rol === "admin" && state.B.marcarPruebasUsadas && !state._pmOk) { state._pmOk = true; state.B.marcarPruebasUsadas(state.pruebas).catch(e => console.warn(e)); }
   state.alumnos = al.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
   state.resDia = dia; state.resMes = mes; state.bloqueos = bl;
   if (state.rol === "admin") [state.profesList, state.mp, state.comps, state.difus, state.plantillas] = await Promise.all([
