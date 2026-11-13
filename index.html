@@ -1251,6 +1251,7 @@ function vAlumnos() {
   const q = state.q.trim().toLowerCase();
   const list = state.alumnos.filter(a => {
     const e = estadoVence(a).k;
+    if (state.filtro === "activos" && e === "inactivo") return false;
     if (state.filtro === "pronto" && e !== "pronto") return false;
     if (state.filtro === "vencido" && e !== "vencido") return false;
     if (state.filtro === "inactivo" && e !== "inactivo") return false;
@@ -1260,7 +1261,7 @@ function vAlumnos() {
   const ym = state.agFecha.slice(0, 7);
   return `<div class="row"><input id="q" placeholder="Buscar por nombre, mail o teléfono" value="${esc(state.q)}" class="grow" style="width:auto">
       <button class="btn sm" data-a="alNuevo">+ Nuevo</button></div>
-    <div class="tabs">${[["todos","Todos (" + state.alumnos.length + ")"],["pronto","Vencen pronto (" + cnt("pronto") + ")"],["vencido","Vencidos (" + cnt("vencido") + ")"],["inactivo","Inactivos (" + cnt("inactivo") + ")"]]
+    <div class="tabs">${[["todos","Todos (" + state.alumnos.length + ")"],["activos","Activos (" + state.alumnos.filter(a => estadoVence(a).k !== "inactivo").length + ")"],["pronto","Vencen pronto (" + cnt("pronto") + ")"],["vencido","Vencidos (" + cnt("vencido") + ")"],["inactivo","Inactivos (" + cnt("inactivo") + ")"]]
       .map(([k, l]) => `<button class="tab ${state.filtro === k ? "sel" : ""}" data-a="filtro" data-k="${k}">${l}</button>`).join("")}</div>
     ${compPendientes()}
     ${mpPendientes()}
