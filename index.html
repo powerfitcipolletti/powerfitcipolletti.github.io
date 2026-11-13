@@ -234,7 +234,10 @@ function cicloDe(a, f) {
   if (!a?.inicio) { const ym = f.slice(0, 7); return {desde: ym + "-01", hasta: ym + "-31"}; }
   let n = Math.max(0, Math.floor(diasEntre(a.inicio, f) / 30));
   // El último ciclo del período pago llega hasta el vencimiento (así no aparece un ciclo extra por 1 o 2 días sueltos)
-  const ciclos = a.vence && a.vence >= a.inicio ? Math.max(1, Math.round((diasEntre(a.inicio, a.vence) + 1) / 30)) : 0;
+  // Cantidad de ciclos del período pago: la suscripción de 2 o 3 meses tiene 2 o 3; el pago mensual ("Otro") es un solo ciclo
+  // hasta el vencimiento, aunque se lo hayan extendido (así un pack estirado no regala un cupo nuevo a mitad de camino)
+  const mesesPago = PAGOS.find(x => x.id === a.pago)?.meses || 1;
+  const ciclos = a.vence && a.vence >= a.inicio ? mesesPago : 0;
   if (ciclos && a.vence >= f) n = Math.min(n, ciclos - 1);
   const desde = addDays(a.inicio, n * 30);
   const hasta = ciclos && n === ciclos - 1 && a.vence >= f ? a.vence : addDays(desde, 29);
