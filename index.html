@@ -1577,9 +1577,11 @@ const vacio = v => !String(v ?? "").trim() || /^(no|ninguna|ninguno|nada|-|n\/a)
 // Rojo: marcó alguna condición médica. Naranja: toma medicación, tiene una lesión o dolor, o dejó otra aclaración.
 const nivelFicha = f => {
   if (!f) return null;
-  const nada = v => vacio(v) || /^(n|na|n\/a|no tengo\b.*|ningun[oa]?\b.*|nada\b.*|[\s.\-_]*)$/i.test(String(v).trim());
+  // Respuestas que en realidad dicen "no" ("No tomo medicación", "Ninguna", "Niguna", ".", etc.)
+  const nada = v => { const t = String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    return !t || /^[\s.\-_,;:!?]*$/.test(t) || /^(n|na|n\/a|no+|nada|nunca|sin|puse que\.? no)\b/.test(t) || /^n[iu]n?g?u?n[oa]?s?\b/.test(t); };
   if (!nada(f.condiciones)) return "rojo";
-  const med = String(f.medicacion || "").trim().toLowerCase().startsWith("s") || !nada(f.cualMedicacion);
+  const ms = String(f.medicacion || "").trim().toLowerCase(), med = ms.startsWith("s") || (!ms && !nada(f.cualMedicacion));
   return med || !nada(f.detalle) || !nada(f.lesion) || !nada(f.otra) ? "naranja" : null;
 };
 async function fichaDe(email) {
