@@ -99,6 +99,12 @@
   .ficha dt{color:var(--muted);font-size:12px;margin-top:8px}
   .ficha dd{margin:2px 0 0}
   .ficha .alerta{color:var(--warn);font-weight:600}
+  .rot{display:grid}
+  .rot .rs{grid-area:1/1;visibility:hidden;opacity:0;transition:opacity .4s;margin-bottom:0}
+  .rot .rs.on{visibility:visible;opacity:1}
+  .dots{display:flex;gap:7px;justify-content:center;margin:8px 0 10px}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--line);cursor:pointer}
+  .dots i.on{background:var(--accent)}
   .alf{display:inline-block;vertical-align:-2px;margin-left:5px;flex:none}
   .att{padding:6px 10px;font-size:13px;background:var(--card);color:var(--muted);border:1px solid var(--line)}
   a.att{display:inline-block;border-radius:10px;color:var(--text)}
@@ -846,7 +852,7 @@ function pintarAlumno() {
   const motivoDia = slots.length ? (() => { const tmp = validarReserva(al, state.mis, f, "23:59", exc); return tmp && !/pasó/.test(tmp) ? tmp : null; })() : null;
 
   $app.innerHTML = `${header("Mis turnos")}<div class="wrap">
-    ${avisoHorarioDic()}
+    ${cartelAnuncios()}
     <div class="card"><div class="row between"><div><b>Hola, ${esc((al.nombre || state.user.nombre || "").split(" ")[0])}</b>
       <div class="sub">Plan ${esc(planNombre(al.plan).toLowerCase())}</div>
       <div class="sub">${cupo ? `Te quedan <b style="color:var(--text)">${Math.max(0, cupo - usadasC)}</b> de ${cupo} turnos hasta el ${fmtDM(cicHoy.hasta)}` : ""}</div></div>${venceBadge}</div></div>
@@ -1042,6 +1048,30 @@ const yaEsAlumno = r => r.telefono && state.alumnos.some(a => digitos(a.telefono
 // Aviso del horario nuevo de diciembre (se muestra a alumnas y profes hasta el 30/11 y después desaparece solo)
 const avisoHorarioDic = () => hoy() < "2026-12-01" ? `<div class="note acc"><b>📅 Desde el 1 de diciembre cambian los horarios</b>
   <div style="margin-top:4px">Lunes a jueves: de 8 a 11 y de 16 a 20:30<br>Viernes: de 8 a 10 y de 16 a 19</div></div>` : "";
+// Cartel rotativo de anuncios para las alumnas (cambia solo cada 6 segundos; se puede tocar un puntito para elegir)
+const anunciosAlumnas = () => [
+  hoy() < "2026-12-01" ? `<b>📅 Desde el 1 de diciembre cambian los horarios</b>
+    <div style="margin-top:4px">Lunes a jueves: de 8 a 11 y de 16 a 20:30<br>Viernes: de 8 a 10 y de 16 a 19</div>` : "",
+  `<b>💳 Ahorrá con la suscripción</b>
+    <div style="margin-top:4px">Débito cada 2 meses: <b>15% off</b><br>Débito cada 3 meses: <b>20% off</b></div>
+    <a class="btn sec sm" style="display:inline-block;margin-top:8px;text-decoration:none" target="_blank" href="${waLink(WHATSAPP, "Hola! Quiero pasarme a la suscripción con débito.")}">Quiero suscribirme</a>`,
+  `<b>🏟️ Socios del Club Cipolletti</b>
+    <div style="margin-top:4px">Tenés <b>10% off</b> el primer mes presentando el carnet.</div>
+    <div class="small muted" style="margin-top:4px">Los descuentos no se acumulan.</div>
+    <a class="btn sec sm" style="display:inline-block;margin-top:8px;text-decoration:none" target="_blank" href="${waLink(WHATSAPP, "Hola! Quiero consultar por el descuento para socios del Club Cipolletti.")}">Consultar</a>`
+].filter(Boolean);
+function cartelAnuncios() {
+  const l = anunciosAlumnas(); if (!l.length) return "";
+  const k = (state.anIdx || 0) % l.length;
+  return `<div class="rot">${l.map((h, i) => `<div class="note acc rs ${i === k ? "on" : ""}">${h}</div>`).join("")}</div>
+    ${l.length > 1 ? `<div class="dots">${l.map((_, i) => `<i class="${i === k ? "on" : ""}" data-a="anunc" data-i="${i}"></i>`).join("")}</div>` : ""}`;
+}
+function mostrarAnuncio(i) {
+  const rs = document.querySelectorAll(".rot .rs"), ds = document.querySelectorAll(".dots i"); if (!rs.length) return;
+  state.anIdx = ((i % rs.length) + rs.length) % rs.length;
+  rs.forEach((e, n) => e.classList.toggle("on", n === state.anIdx)); ds.forEach((e, n) => e.classList.toggle("on", n === state.anIdx));
+}
+setInterval(() => { if (document.querySelector(".rot") && !$modal.classList.contains("on")) mostrarAnuncio((state.anIdx || 0) + 1); }, 6000);
 function renderAdmin() {
   const esAdm = state.rol === "admin";
   if (!esAdm) state.tab = "agenda";
@@ -1661,6 +1691,7 @@ document.addEventListener("click", async e => {
     case "dia": state.diaSel = el.dataset.f; renderAlumno(); break;
     case "semAl": state.semAl = addDays(state.semAl || lunesDe(hoy()), Number(el.dataset.d)); renderAlumno(); break;
     case "slot": clickSlot(el.dataset.f, el.dataset.h); break;
+    case "anunc": mostrarAnuncio(Number(el.dataset.i)); break;
     case "cambiar": state.cambiando = state.mis.find(r => r.id === el.dataset.id); state.diaSel = null; renderAlumno(); toast("Elegí el nuevo día y horario"); break;
     case "noCambiar": state.cambiando = null; renderAlumno(); break;
     case "cancelar": {
