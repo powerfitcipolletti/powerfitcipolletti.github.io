@@ -1243,16 +1243,22 @@ async function turnosAlumna(email) {
   const a = alumnoDe(email);
   let rs;
   try { rs = await state.B.reservasDe(email); } catch (e) { return toast(traducirError(e)); }
-  const ahora = Date.now();
+  const ahora = Date.now(), cupo = cupoMes(a);
+  // Número de clase dentro de su ciclo de 30 días (ej. 3/8), como en SigueFit
+  const nro = {};
+  if (cupo) { const orden = [...rs].sort((x, y) => x.inicio - y.inicio), cuenta = {};
+    for (const r of orden) { const c = cicloDe(a, r.fecha); cuenta[c.desde] = (cuenta[c.desde] || 0) + 1; nro[r.id] = `${cuenta[c.desde]}/${cupo}`; } }
   const prox = rs.filter(r => r.inicio >= ahora).sort((x, y) => x.inicio - y.inicio);
   const pas = rs.filter(r => r.inicio < ahora).sort((x, y) => y.inicio - x.inicio);
   const fila = (r, pasado) => {
     const est = !pasado ? "" : r.asistencia === true ? `<span class="badge ok">Presente</span>` : r.asistencia === false ? `<span class="badge bad">Ausente</span>` : `<span class="badge">Sin marcar</span>`;
     return `<div class="row between" style="padding:7px 0;border-bottom:1px solid var(--line)">
-      <span>${esc(fmtCorto(r.fecha))} · ${esc(r.hora)} hs${r.pago ? ` <span class="badge ok">💵 ${plata(r.pago.monto)}</span>` : ""}</span>${est}</div>`;
+      <span>${nro[r.id] ? `<b>${nro[r.id]}</b> · ` : ""}${esc(fmtCorto(r.fecha))} · ${esc(r.hora)} hs${r.pago ? ` <span class="badge ok">💵 ${plata(r.pago.monto)}</span>` : ""}</span>${est}</div>`;
   };
   const vino = pas.filter(r => r.asistencia === true).length, falto = pas.filter(r => r.asistencia === false).length;
+  const cHoy = cupo ? cicloDe(a, hoy()) : null;
   const html = `<p class="sub" style="margin-top:0">${esc(planNombre(a?.plan))}${a?.vence ? " · vence " + fmtFecha(a.vence) : ""}</p>
+    ${cHoy ? `<p class="sub" style="margin:4px 0 0">Ciclo actual (${fmtDM(cHoy.desde)} al ${fmtDM(cHoy.hasta)}): <b>${enCiclo(rs, cHoy)} de ${cupo}</b> turnos usados o agendados</p>` : ""}
     <h4 style="margin:14px 0 4px">Próximos (${prox.length})</h4>
     ${prox.length ? prox.map(r => fila(r, false)).join("") : `<p class="small muted">No tiene turnos agendados.</p>`}
     <h4 style="margin:18px 0 4px">Anteriores (${pas.length})</h4>
