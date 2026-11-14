@@ -346,6 +346,7 @@ function demoBackend() {
     async listProfes() { return clone(S.profes || []); },
     async saveProfe(p) { S.profes = (S.profes || []).filter(x => x.email !== p.email); S.profes.push(clone(p)); notify(); },
     async deleteProfe(email) { S.profes = (S.profes || []).filter(x => x.email !== email); notify(); },
+    async getContrato() { return null; }, async firmarContrato() {}, async listContratos() { return []; },
     async setPago(r, v) { const x = S.reservas.find(y => y.id === r.id); if (x) { if (v == null) delete x.pago; else x.pago = clone(v); } notify(); },
     async getConfig() { return clone(S.config); },
     async saveConfig(c) { S.config = clone(c); notify(); },
@@ -495,6 +496,18 @@ async function firebaseBackend() {
     async listProfes() { return (await getDocs(collection(db, "profes"))).docs.map(d => ({email: d.id, ...d.data()})); },
     async saveProfe(p) { await setDoc(doc(db, "profes", p.email), {nombre: p.nombre || ""}); },
     async deleteProfe(email) { await deleteDoc(doc(db, "profes", email)); },
+    // Contrato de cada profe (contratos/{mail}): lo carga la dueña y la profe lo firma desde su app antes de entrar
+    async getContrato(email) {
+      try { const s = await getDoc(doc(db, "contratos", email || me.email)); if (!s.exists()) return null; const d = s.data(); return {...d, id: s.id, firmadoEn: d.firmadoEn?.toMillis?.() || null}; }
+      catch (e) { console.warn(e); return null; }
+    },
+    async firmarContrato(d) {
+      await updateDoc(doc(db, "contratos", me.email), {firma: d.firma, aclaracion: d.aclaracion, cuil: d.cuil, acepto: true, dispositivo: navigator.userAgent.slice(0, 200), firmadoEn: serverTimestamp()});
+    },
+    async listContratos() {
+      try { return (await getDocs(collection(db, "contratos"))).docs.map(x => { const d = x.data(); return {...d, id: x.id, firmadoEn: d.firmadoEn?.toMillis?.() || null}; }); }
+      catch (e) { console.warn(e); return []; }
+    },
     async setPago(r, v) { await updateDoc(doc(db, "reservas", r.id), {pago: v == null ? deleteField() : v}); },
     async getConfig() {
       const s = await getDoc(doc(db, "config", "general"));
@@ -1047,6 +1060,7 @@ async function cargarAdmin() {
   state.resDia = dia; state.resMes = mes; state.bloqueos = bl;
   if (state.rol === "admin") [state.profesList, state.mp, state.comps, state.difus, state.plantillas] = await Promise.all([
     state.B.listProfes(), state.B.listMp(), state.B.listComprobantes(), state.B.listDifusiones(), state.B.listPlantillas()]);
+  if (state.rol === "admin") state.contratos = await state.B.listContratos();
 }
 const alumnoDe = email => state.alumnos.find(a => a.email === email);
 // Todas las reservas cargadas (día, semana, pruebas), sin repetir
@@ -1094,7 +1108,8 @@ function renderAdmin() {
   const prevSem = document.querySelector(".semana"), prevScroll = prevSem && state._semLun === lunesDe(state.agFecha) ? prevSem.scrollLeft : null;
   $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
     ${!esAdm ? avisoHorarioDic() : `<div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${state.tab === k ? "sel" : ""}" data-a="tab" data-t="${k}">${l}</button>`).join("")}</div>`}
-    ${body}</div>`;
+    ${body}
+    ${!esAdm && state.miContrato?.firmadoEn ? `<p class="center small" style="margin:22px 0 8px"><button class="link" data-a="verContrato" data-e="${esc(state.user.email)}">Ver mi contrato firmado</button></p>` : ""}</div>`;
   if (semana) { // vuelve a donde estaba, o muestra primero el día elegido
     const sc = document.querySelector(".semana"), c = document.querySelector(`.col[data-f="${state.agFecha}"]`);
     if (sc) sc.scrollLeft = prevScroll != null ? prevScroll : c ? c.offsetLeft - sc.offsetLeft - 16 : 0;
@@ -1643,7 +1658,10 @@ function vAjustes() {
     <button class="btn" style="width:100%" data-a="saveCfg">Guardar ajustes</button>
     <p class="small muted center" style="margin-top:14px">Los cambios se aplican al instante para todos los alumnos. Los turnos ya reservados no se modifican.</p>
     <div class="card"><b>Profes</b><p class="sub">Entran por el link de la app de profes y solo ven la agenda: marcan presente, ausente y pagos en efectivo.</p>
-      ${(state.profesList || []).map(p => `<div class="person"><span class="name">${esc(p.nombre || "")} <span class="sub">${esc(p.email)}</span></span><button class="x" data-a="delProfe" data-e="${esc(p.email)}">×</button></div>`).join("") || `<div class="empty">Todavía no hay profes cargadas</div>`}
+      ${(state.profesList || []).map(p => { const c = (state.contratos || []).find(x => x.id === p.email);
+        const est = !c ? "" : c.firmadoEn ? `<button class="link" style="color:var(--ok,#34c759)" data-a="verContrato" data-e="${esc(p.email)}">Contrato firmado el ${new Date(c.firmadoEn).toLocaleDateString("es-AR")} · ver</button>`
+          : `<button class="link" data-a="verContrato" data-e="${esc(p.email)}">Contrato pendiente de firma · ver</button>`;
+        return `<div class="person"><span class="name">${esc(p.nombre || "")} <span class="sub">${esc(p.email)}</span>${est ? `<br>${est}` : ""}</span><button class="x" data-a="delProfe" data-e="${esc(p.email)}">×</button></div>`; }).join("") || `<div class="empty">Todavía no hay profes cargadas</div>`}
       <div class="grid2" style="margin-top:6px"><div><label>Nombre</label><input id="pNom" placeholder="Juli"></div><div><label>Gmail</label><input id="pMail" type="email" placeholder="juli@gmail.com"></div></div>
       <button class="btn sec" style="width:100%;margin-top:10px" data-a="addProfe">+ Agregar profe</button></div>
     <div class="card"><b>Links</b>
@@ -1747,6 +1765,7 @@ document.addEventListener("click", async e => {
     case "verifReenviar": await run(() => B.reenviarVerif(), "Te lo mandamos de nuevo (mirá también en spam)"); break;
     case "demoLogin": B.login(el.dataset.k); break;
     case "demoReset": if (await modal({title: "¿Reiniciar la demo?", html: "<p>Se vuelven a cargar los datos de ejemplo.</p>", ok: "Reiniciar"})) { await B.reset(); location.reload(); } break;
+    case "verContrato": verContrato(el.dataset.e); break;
     case "logout": state.unsub && state.unsub(); state.unsub = null; state.cambiando = null; await B.logout(); break;
     case "prDia": pr.dia = el.dataset.f; renderPrueba(); break;
     case "prSlot": prElegir(el.dataset.f, el.dataset.h); break;
@@ -1830,6 +1849,80 @@ document.addEventListener("input", e => {
 // Refresca la vista del alumno cada minuto (para que los turnos pasados se actualicen)
 setInterval(() => { if (state.user && RUTA === "alumnos" && state.alumno && !$modal.classList.contains("on")) renderAlumno(); }, 60e3);
 
+/* ============================ CONTRATO DE PROFES ============================ */
+// Texto simple: "## " título, "- " viñeta, el resto párrafos
+function contratoCuerpo(c) {
+  const lineas = String(c.texto || "").split("\n").map(l => l.trim()).filter(Boolean);
+  let h = "", enLista = false;
+  for (const l of lineas) {
+    const li = l.startsWith("- ");
+    if (enLista && !li) { h += "</ul>"; enLista = false; }
+    if (l.startsWith("## ")) h += `<h4 style="margin:18px 0 6px">${esc(l.slice(3))}</h4>`;
+    else if (li) { if (!enLista) { h += `<ul style="margin:4px 0 8px;padding-left:20px">`; enLista = true; } h += `<li style="margin:3px 0">${esc(l.slice(2))}</li>`; }
+    else h += `<p style="margin:6px 0">${esc(l)}</p>`;
+  }
+  if (enLista) h += "</ul>";
+  return `<div style="text-align:center;margin-bottom:10px"><b style="font-size:17px">${esc(c.titulo || "Acuerdo de prestación de servicios")}</b><div class="sub">${esc(c.lugar || "Cipolletti, Río Negro")}</div></div>${h}
+    ${c.fechaInicio ? `<p style="margin:12px 0 0"><b>Fecha de inicio del acuerdo:</b> ${esc(fmtFechaAR(c.fechaInicio))}</p>` : ""}`;
+}
+const fmtFechaAR = f => /^\d{4}-\d{2}-\d{2}$/.test(f || "") ? f.split("-").reverse().join("/") : (f || "");
+function contratoFirmas(c) {
+  const f = c.firmadoEn ? new Date(c.firmadoEn) : null;
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px;font-size:14px">
+    <div><b>POR POWERFIT</b><div style="height:90px;border-bottom:1px solid #999"></div>Aclaración: ${esc(c.aclaracionPowerfit || "Florentina Cecchini")}</div>
+    <div><b>LA PROFESIONAL</b><div style="height:90px;border-bottom:1px solid #999;display:flex;align-items:flex-end">${c.firma ? `<img src="${c.firma}" alt="Firma" style="max-height:88px;max-width:100%;background:#fff">` : ""}</div>
+      Aclaración: ${esc(c.aclaracion || c.nombre || "")}<br>CUIL: ${esc(c.cuil || "")}<br>Fecha de firma: ${f ? f.toLocaleDateString("es-AR") + " " + f.toLocaleTimeString("es-AR", {hour: "2-digit", minute: "2-digit"}) : ""}</div></div>`;
+}
+function renderContrato(c) {
+  $app.innerHTML = `${header("Profes · " + state.user.email)}<div class="wrap">
+    <div class="note">Antes de entrar a la app, leé tu acuerdo con PowerFit y firmalo al final. Se hace una sola vez.</div>
+    <div class="card" style="background:#fff;color:#111;line-height:1.45;font-size:15px">${contratoCuerpo(c)}</div>
+    <div class="card">
+      <label style="display:flex;gap:10px;align-items:flex-start;font-size:15px;cursor:pointer"><input type="checkbox" id="kAcepto" style="width:22px;height:22px;flex:none;margin-top:1px"> Leí el acuerdo y acepto sus condiciones</label>
+      <div class="grid2" style="margin-top:10px"><div><label>Aclaración</label><input id="kAcl" value="${esc(c.nombre || state.user.nombre || "")}"></div>
+        <div><label>CUIL</label><input id="kCuil" inputmode="numeric" placeholder="27-12345678-9"></div></div>
+      <label style="margin-top:12px">Firma (con el dedo)</label>
+      <canvas id="kFirma" style="display:block;width:100%;height:180px;background:#fff;border-radius:10px;touch-action:none;cursor:crosshair"></canvas>
+      <p class="small" style="margin:6px 0 12px;display:flex;justify-content:space-between"><span class="muted">Firmá dentro del recuadro blanco</span><button class="link" id="kBorrar">Borrar firma</button></p>
+      <button class="btn" style="width:100%" id="kFirmar">Firmar y entrar</button></div></div>`;
+  const cv = document.getElementById("kFirma"), ctx = cv.getContext("2d");
+  let trazos = 0, dib = false, ult = null;
+  const ajustar = () => { const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1; cv.width = r.width * d; cv.height = r.height * d; ctx.setTransform(d, 0, 0, d, 0, 0); ctx.lineWidth = 2.6; ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = "#111"; trazos = 0; };
+  ajustar();
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.addEventListener("pointerdown", e => { e.preventDefault(); cv.setPointerCapture(e.pointerId); dib = true; ult = pos(e); ctx.beginPath(); ctx.arc(ult[0], ult[1], 1.2, 0, 7); ctx.fillStyle = "#111"; ctx.fill(); trazos++; });
+  cv.addEventListener("pointermove", e => { if (!dib) return; e.preventDefault(); const p = pos(e); ctx.beginPath(); ctx.moveTo(ult[0], ult[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); ult = p; trazos++; });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(t => cv.addEventListener(t, () => { dib = false; }));
+  document.getElementById("kBorrar").onclick = () => { ctx.clearRect(0, 0, cv.width, cv.height); trazos = 0; };
+  document.getElementById("kFirmar").onclick = async () => {
+    const acl = document.getElementById("kAcl").value.trim(), cuilD = document.getElementById("kCuil").value.replace(/\D/g, "");
+    if (!document.getElementById("kAcepto").checked) return toast("Marcá que leíste y aceptás el acuerdo");
+    if (acl.length < 3) return toast("Escribí tu nombre y apellido en la aclaración");
+    if (cuilD.length !== 11) return toast("Revisá el CUIL: son 11 números");
+    if (trazos < 8) return toast("Firmá con el dedo en el recuadro blanco");
+    const cuil = `${cuilD.slice(0, 2)}-${cuilD.slice(2, 10)}-${cuilD.slice(10)}`;
+    // la firma se guarda achicada (fondo blanco) para que pese poco
+    const o = document.createElement("canvas"), w = 520, h = Math.round(w * cv.height / cv.width); o.width = w; o.height = h;
+    const ox = o.getContext("2d"); ox.fillStyle = "#fff"; ox.fillRect(0, 0, w, h); ox.drawImage(cv, 0, 0, w, h);
+    const firma = o.toDataURL("image/png");
+    const btn = document.getElementById("kFirmar"); btn.disabled = true; btn.textContent = "Guardando…";
+    const ok = await run(() => state.B.firmarContrato({firma, aclaracion: acl, cuil}), "¡Listo! Contrato firmado");
+    if (ok) alEntrar(state.user); else { btn.disabled = false; btn.textContent = "Firmar y entrar"; }
+  };
+}
+async function verContrato(email) {
+  const c = email === state.user?.email && state.miContrato ? state.miContrato : (state.contratos || []).find(x => x.id === email) || await state.B.getContrato(email);
+  if (!c) return toast("No hay contrato cargado");
+  const hoja = `<div style="background:#fff;color:#111;padding:14px;border-radius:10px;line-height:1.45;font-size:14px;max-height:62vh;overflow:auto">${contratoCuerpo(c)}${contratoFirmas(c)}</div>`;
+  const r = await modal({title: c.firmadoEn ? "Contrato firmado" : "Contrato (pendiente de firma)", html: hoja, ok: "Imprimir / guardar PDF", cancel: "Cerrar"});
+  if (!r) return;
+  const w = window.open("", "_blank"); if (!w) return toast("Permití las ventanas emergentes para imprimir");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Contrato PowerFit · ${esc(c.aclaracion || c.nombre || email)}</title>
+    <style>body{font-family:Arial,sans-serif;max-width:760px;margin:30px auto;padding:0 20px;color:#111;line-height:1.45;font-size:13px} h4{font-size:14px}</style></head>
+    <body><div style="font-weight:800;font-size:20px;letter-spacing:.05em">POWERFIT</div>${contratoCuerpo(c)}${contratoFirmas(c)}</body></html>`);
+  w.document.close(); setTimeout(() => w.print(), 400);
+}
+
 /* ============================ ARRANQUE ============================ */
 async function alEntrar(u) {
   state.user = u;
@@ -1851,6 +1944,8 @@ async function alEntrar(u) {
     }
     if (RUTA === "profes") {
       if (state.rol === "alumno") return renderSinAcceso(`La cuenta <b>${esc(u.email)}</b> no tiene acceso a la app de profes.`, "Ir a mis turnos", LINKS.alumnos);
+      // Antes de entrar por primera vez, la profe lee y firma su contrato (si la dueña le cargó uno)
+      if (state.profe) { state.miContrato = await state.B.getContrato(u.email); if (state.miContrato && !state.miContrato.firmadoEn) return renderContrato(state.miContrato); }
       state.rol = "profe"; // las dueñas también pueden entrar, y ven exactamente lo mismo que una profe
       state.tab = "agenda"; state.agFecha = hoy(); await cargarAdmin(); return renderAdmin();
     }
