@@ -1307,8 +1307,9 @@ function vTablero() {
   // Clases de prueba: últimos 30 días y cuántas se anotaron
   const pr30 = state.pruebas.filter(r => r.fecha >= addDays(H, -30) && r.fecha < H), prFut = state.pruebas.filter(r => r.fecha >= H);
   const conv = pr30.filter(r => { const a = alumnoDe(String(r.mail || "").toLowerCase()); return a && a.activo; }).length;
-  // Reservas por semana (las 5 anteriores, la actual y la que viene)
-  const semanas = [...Array(7)].map((_, i) => { const l = addDays(lun, (i - 5) * 7); return {l, n: rs.filter(r => r.fecha >= l && r.fecha <= addDays(l, 6)).length}; });
+  // Reservas por semana: hasta 4 anteriores, la actual y las 2 que vienen (desde el 2/11, cuando arrancó la app con todos los turnos)
+  const semanas = [...Array(7)].map((_, i) => addDays(lun, (i - 4) * 7)).filter(l => l >= "2026-11-02")
+    .map(l => ({l, n: rs.filter(r => r.fecha >= l && r.fecha <= addDays(l, 6)).length}));
   const maxS = Math.max(1, ...semanas.map(x => x.n));
   // Horarios más pedidos (últimas 4 semanas)
   const porHora = {}; rs.filter(r => r.fecha >= addDays(H, -28) && r.fecha <= H).forEach(r => porHora[r.hora] = (porHora[r.hora] || 0) + 1);
@@ -1326,11 +1327,11 @@ function vTablero() {
       ${kpi(vig.length, "Alumnos con plan vigente", vencidas.length ? vencidas.length + " vencido" + (vencidas.length === 1 ? "" : "s") + " sin renovar" : "")}
       ${kpi(plata(ingreso), "Ingreso mensual estimado", susc + " con suscripción · " + (vig.length - susc) + " mensual")}
       ${kpi(ocup + "%", "Ocupación de esta semana", semRes + " de " + cap + " lugares")}
-      ${kpi(asis == null ? "—" : asis + "%", "Asistencia (30 días)", pres + aus ? pres + " presentes · " + aus + " ausentes" : "Todavía no se marcó asistencia")}
+      ${pres ? kpi(asis + "%", "Asistencia (30 días)", pres + " presentes · " + aus + " ausentes") : kpi(aus, "Ausencias (30 días)", "Turnos marcados como ausente")}
       ${kpi(pr30.length, "Clases de prueba (30 días)", (pr30.length ? conv + " se anotaron · " : "") + prFut.length + " agendadas")}
       ${kpi(renovar.length, "Para renovar", "Vencen en 7 días o vencieron hace poco")}
     </div>
-    <div class="card"><b>Reservas por semana</b>${semanas.map(x => barra(x.l === lun ? "Esta semana" : x.l > lun ? "Próxima" : "Sem. " + fmtDM(x.l), x.n, maxS)).join("")}</div>
+    <div class="card"><b>Reservas por semana</b>${semanas.map(x => barra(x.l === lun ? "Esta semana" : x.l === addDays(lun, 7) ? "Próxima" : "Sem. " + fmtDM(x.l), x.n, maxS)).join("")}</div>
     <div class="card"><b>Horarios más pedidos</b><div class="sub">Últimas 4 semanas</div>${horas.length ? horas.slice(0, 8).map(([h, n]) => barra(h, n, maxH)).join("") : `<div class="sub">Sin datos</div>`}</div>
     <div class="card"><b>Alumnos por plan</b>${porPlan.map(([l, n]) => barra(l, n, Math.max(1, vig.length))).join("")}</div>
     <div class="card"><b>Para renovar</b>${renovar.length ? renovar.map(a => persona(a, (a.vence < H ? "Venció el " : "Vence el ") + fmtFecha(a.vence) + " · " + futuras(a.email) + " turno" + (futuras(a.email) === 1 ? "" : "s") + " agendado" + (futuras(a.email) === 1 ? "" : "s"))).join("") : `<div class="sub">Nadie por ahora</div>`}</div>
