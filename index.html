@@ -857,6 +857,8 @@ function validarReserva(al, mis, f, h, excluirId) {
   if (al.vence && f > al.vence) return `Tu plan vence el ${fmtFecha(al.vence)}. Escribinos para renovarlo.`;
   if (inicioMs(f, h) <= Date.now()) return "Ese horario ya pasó";
   const otras = mis.filter(r => r.id !== excluirId);
+  // Si está cambiando un turno, el que suelta cuenta como libre: cambiar dentro de la misma semana o del mismo ciclo no suma turnos
+  const suelta = excluirId ? mis.find(r => r.id === excluirId) : null;
   if (otras.some(r => r.fecha === f)) return "Ya tenés un turno ese día";
   const maxSeg = Number(state.cfg.maxSeguidos) || 1;
   if (rachaCon(otras.map(r => r.fecha), f) > maxSeg)
@@ -864,12 +866,12 @@ function validarReserva(al, mis, f, h, excluirId) {
   const max = Number(state.cfg.maxSemana) || 0;
   if (max > 0) {
     const lun = lunesDe(f), usadas = otras.filter(r => lunesDe(r.fecha) === lun).length;
-    if (usadas >= max) return `Podés reservar hasta ${max} turnos por semana y ya tenés ${usadas} esa semana`;
+    if (usadas >= max && !(suelta && lunesDe(suelta.fecha) === lun)) return `Podés reservar hasta ${max} turnos por semana y ya tenés ${usadas} esa semana`;
   }
   const cupo = cupoMes(al);
   if (cupo > 0) {
     const c = cicloDe(al, f), usadasC = enCiclo(otras, c);
-    if (usadasC >= cupo) return `Tu plan incluye ${cupo} turnos cada 30 días y ya tenés ${usadasC} entre el ${fmtDM(c.desde)} y el ${fmtDM(c.hasta)}`;
+    if (usadasC >= cupo && !(suelta && suelta.fecha >= c.desde && suelta.fecha <= c.hasta)) return `Tu plan incluye ${cupo} turnos cada 30 días y ya tenés ${usadasC} entre el ${fmtDM(c.desde)} y el ${fmtDM(c.hasta)}`;
   }
   return null;
 }
