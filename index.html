@@ -105,6 +105,15 @@
   .dots{display:flex;gap:7px;justify-content:center;margin:8px 0 10px}
   .dots i{width:7px;height:7px;border-radius:50%;background:var(--line);cursor:pointer}
   .dots i.on{background:var(--accent)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:12px}
+  .kpis .card{margin:0}
+  .kpi .kn{font-size:26px;font-weight:800;line-height:1.1}
+  .kpi .kt{font-size:13px;color:var(--muted);margin-top:2px}
+  .bar{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px}
+  .bar .bl{width:120px;flex:none;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .bt{flex:1;height:10px;background:var(--card2);border-radius:99px;overflow:hidden}
+  .bar .bt i{display:block;height:100%;background:var(--accent);border-radius:99px}
+  .bar .bn{width:34px;text-align:right;font-weight:700}
   .alf{display:inline-block;vertical-align:-2px;margin-left:5px;flex:none}
   .att{padding:6px 10px;font-size:13px;background:var(--card);color:var(--muted);border:1px solid var(--line)}
   a.att{display:inline-block;border-radius:10px;color:var(--text)}
@@ -1078,9 +1087,9 @@ setInterval(() => { if (document.querySelector(".rot") && !$modal.classList.cont
 function renderAdmin() {
   const esAdm = state.rol === "admin";
   if (!esAdm) state.tab = "agenda";
-  const tabs = [["agenda","Agenda"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos"],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
+  const tabs = [["agenda","Agenda"],["tablero","Tablero"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos"],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
   const semana = state.tab === "agenda" && state.vista !== "dia";
-  const body = {agenda: semana ? vAgendaSemana : vAgenda, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
+  const body = {agenda: semana ? vAgendaSemana : vAgenda, tablero: vTablero, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
   document.body.classList.toggle("ancho", semana);
   const prevSem = document.querySelector(".semana"), prevScroll = prevSem && state._semLun === lunesDe(state.agFecha) ? prevSem.scrollLeft : null;
   $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
@@ -1275,6 +1284,57 @@ function statsAlumno(email) {
   const ym = state.agFecha.slice(0, 7);
   const rs = state.resMes.filter(r => r.email === email && r.fecha.slice(0, 7) === ym);
   return {usadas: rs.length, vino: rs.filter(r => r.asistencia === true).length, falto: rs.filter(r => r.asistencia === false).length};
+}
+/* ---------- Tablero de indicadores (solo dueñas) ---------- */
+function vTablero() {
+  const H = hoy(), cfg = state.cfg, rs = (state.resRango || []).filter(r => !esPrueba(r));
+  const sinPlan = a => !a.plan || a.sinRestricciones;
+  const vig = state.alumnos.filter(a => a.activo && !sinPlan(a) && (!a.vence || a.vence >= H));
+  const vencidas = state.alumnos.filter(a => a.activo && !sinPlan(a) && a.vence && a.vence < H);
+  // Ingreso mensual: precio del plan con el descuento de la forma de pago, llevado a un mes
+  const mensual = a => { const p = PLANES.find(x => x.id === a.plan), g = PAGOS.find(x => x.id === a.pago); return p ? p.precio * (1 - ((g && g.desc) || 0) / 100) : 0; };
+  const ingreso = vig.reduce((t, a) => t + mensual(a), 0);
+  const susc = vig.filter(a => PAGOS.find(x => x.id === a.pago)?.meses).length;
+  // Ocupación de esta semana (lunes a viernes, sin horarios bloqueados)
+  const lun = lunesDe(H); let cap = 0;
+  for (let i = 0; i < 5; i++) { const d = addDays(lun, i); if (diaBloqueado(d)) continue; cap += slotsDelDia(cfg, d).filter(h => !bloqueo(d, h)).length * cfg.capacidad; }
+  const semRes = (state.resRango || []).filter(r => r.fecha >= lun && r.fecha <= addDays(lun, 6)).length;
+  const ocup = cap ? Math.round(semRes / cap * 100) : 0;
+  // Asistencia de los últimos 30 días (solo turnos donde se marcó presente o ausente)
+  const ult30 = rs.filter(r => r.fecha >= addDays(H, -30) && r.fecha < H);
+  const pres = ult30.filter(r => r.asistencia === true).length, aus = ult30.filter(r => r.asistencia === false || r.asistencia === "ausente").length;
+  const asis = pres + aus ? Math.round(pres / (pres + aus) * 100) : null;
+  // Clases de prueba: últimos 30 días y cuántas se anotaron
+  const pr30 = state.pruebas.filter(r => r.fecha >= addDays(H, -30) && r.fecha < H), prFut = state.pruebas.filter(r => r.fecha >= H);
+  const conv = pr30.filter(r => { const a = alumnoDe(String(r.mail || "").toLowerCase()); return a && a.activo; }).length;
+  // Reservas por semana (las 5 anteriores, la actual y la que viene)
+  const semanas = [...Array(7)].map((_, i) => { const l = addDays(lun, (i - 5) * 7); return {l, n: rs.filter(r => r.fecha >= l && r.fecha <= addDays(l, 6)).length}; });
+  const maxS = Math.max(1, ...semanas.map(x => x.n));
+  // Horarios más pedidos (últimas 4 semanas)
+  const porHora = {}; rs.filter(r => r.fecha >= addDays(H, -28) && r.fecha <= H).forEach(r => porHora[r.hora] = (porHora[r.hora] || 0) + 1);
+  const horas = Object.entries(porHora).sort((a, b) => b[1] - a[1]), maxH = Math.max(1, ...horas.map(x => x[1]));
+  // Para renovar: vencen en 7 días o vencieron hace poco
+  const futuras = email => rs.filter(r => r.email === email && r.fecha >= H).length;
+  const renovar = state.alumnos.filter(a => a.activo && !sinPlan(a) && a.vence && a.vence <= addDays(H, 7) && a.vence >= addDays(H, -15)).sort((a, b) => a.vence.localeCompare(b.vence));
+  const sinTurnos = vig.filter(a => !futuras(a.email));
+  const porPlan = PLANES.map(p => [p.veces + (p.veces === 1 ? " vez" : " veces") + " x sem.", vig.filter(a => a.plan === p.id).length]);
+  const kpi = (n, t, sub = "") => `<div class="card kpi"><div class="kn">${n}</div><div class="kt">${t}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
+  const barra = (lbl, n, max, extra = "") => `<div class="bar"><span class="bl">${lbl}</span><span class="bt"><i style="width:${Math.round(n / max * 100)}%"></i></span><span class="bn">${n}${extra}</span></div>`;
+  const persona = (a, det) => `<div class="row between" style="padding:6px 0;border-top:1px solid var(--line)"><span>${esc(a.nombre || a.email)}<div class="sub">${det}</div></span>
+    ${a.telefono ? `<a class="btn sec sm" target="_blank" href="${waLink(a.telefono, "Hola " + (a.nombre || "").split(" ")[0] + "!")}">WhatsApp</a>` : ""}</div>`;
+  return `<div class="kpis">
+      ${kpi(vig.length, "Alumnos con plan vigente", vencidas.length ? vencidas.length + " vencido" + (vencidas.length === 1 ? "" : "s") + " sin renovar" : "")}
+      ${kpi(plata(ingreso), "Ingreso mensual estimado", susc + " con suscripción · " + (vig.length - susc) + " mensual")}
+      ${kpi(ocup + "%", "Ocupación de esta semana", semRes + " de " + cap + " lugares")}
+      ${kpi(asis == null ? "—" : asis + "%", "Asistencia (30 días)", pres + aus ? pres + " presentes · " + aus + " ausentes" : "Todavía no se marcó asistencia")}
+      ${kpi(pr30.length, "Clases de prueba (30 días)", (pr30.length ? conv + " se anotaron · " : "") + prFut.length + " agendadas")}
+      ${kpi(renovar.length, "Para renovar", "Vencen en 7 días o vencieron hace poco")}
+    </div>
+    <div class="card"><b>Reservas por semana</b>${semanas.map(x => barra(x.l === lun ? "Esta semana" : x.l > lun ? "Próxima" : "Sem. " + fmtDM(x.l), x.n, maxS)).join("")}</div>
+    <div class="card"><b>Horarios más pedidos</b><div class="sub">Últimas 4 semanas</div>${horas.length ? horas.slice(0, 8).map(([h, n]) => barra(h, n, maxH)).join("") : `<div class="sub">Sin datos</div>`}</div>
+    <div class="card"><b>Alumnos por plan</b>${porPlan.map(([l, n]) => barra(l, n, Math.max(1, vig.length))).join("")}</div>
+    <div class="card"><b>Para renovar</b>${renovar.length ? renovar.map(a => persona(a, (a.vence < H ? "Venció el " : "Vence el ") + fmtFecha(a.vence) + " · " + futuras(a.email) + " turno" + (futuras(a.email) === 1 ? "" : "s") + " agendado" + (futuras(a.email) === 1 ? "" : "s"))).join("") : `<div class="sub">Nadie por ahora</div>`}</div>
+    <div class="card"><b>Con plan vigente y sin turnos agendados</b><div class="sub">Conviene escribirles para que reserven</div>${sinTurnos.length ? sinTurnos.map(a => persona(a, "Vence el " + fmtFecha(a.vence))).join("") : `<div class="sub">Todos tienen turnos</div>`}</div>`;
 }
 function estadoVence(a) {
   if (!a.activo) return {k: "inactivo", html: `<span class="badge">Inactivo</span>`};
