@@ -979,16 +979,21 @@ async function aprobarComprobante(id) {
   const box = await modal({title: "Aprobar y renovar", ok: "Aprobar", html: `<p><b>${esc(a.nombre || a.email)}</b>${c.monto ? " · pagó " + plata(c.monto) : ""}</p>
     <div class="grid2"><div><label>Nuevo inicio</label><input type="date" name="i" value="${ini0}"></div>
     <div><label>Meses que paga</label><select name="m">${[1, 2, 3].map(n => `<option value="${n}" ${n === meses0 ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>
-    <p class="sub" style="margin-top:10px">Vence: <b id="cVence"></b></p>`,
+    <p class="sub" style="margin-top:10px">Vence: <b id="cVence"></b></p>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" name="av" checked style="width:20px;height:20px"> Avisarle por mail que el pago está aprobado</label>`,
     onOpen: b => { const i = b.querySelector("[name=i]"), m = b.querySelector("[name=m]"), v = b.querySelector("#cVence");
       const calc = () => v.textContent = i.value ? fmtFecha(addMonths(i.value, Number(m.value))) : "—"; i.onchange = m.onchange = calc; calc(); }});
   if (!box) return;
-  const inicio = box.querySelector("[name=i]").value, vence = addMonths(inicio, Number(box.querySelector("[name=m]").value));
+  const inicio = box.querySelector("[name=i]").value, vence = addMonths(inicio, Number(box.querySelector("[name=m]").value)), avisar = box.querySelector("[name=av]").checked;
   if (!inicio) return toast("Elegí la fecha de inicio");
   if (await run(async () => {
     await state.B.saveAlumno({...a, inicio, vence, activo: true});
     await state.B.resolverComprobante(id, {estado: "aprobado", inicio, vence, revisado: h});
-  }, "Aprobado: plan renovado hasta el " + fmtFecha(vence))) { await cargarAdmin(); renderAdmin(); }
+    // mail automático: lo manda el programa de avisos desde el Gmail del gimnasio (igual que los mails masivos)
+    if (avisar) await state.B.crearDifusion({asunto: "Tu pago fue aprobado ✅", boton: true, para: "pago", fecha: h, ts: Date.now(),
+      cuerpo: `¡Hola {nombre}!\n\nRecibimos tu pago y ya renovamos tu plan: queda vigente hasta el ${fmtFecha(vence)}.\n\nYa podés reservar tus turnos desde la app.\n\n¡Gracias por entrenar en PowerFit!`,
+      destinatarios: [a.email + "|" + (a.nombre || "").split(" ")[0]]});
+  }, "Aprobado: plan renovado hasta el " + fmtFecha(vence) + (avisar ? ". Le llega el mail en unos minutos" : ""))) { await cargarAdmin(); renderAdmin(); }
 }
 async function rechazarComprobante(id) {
   const box = await modal({title: "Rechazar comprobante", ok: "Rechazar", danger: true,
@@ -1101,13 +1106,14 @@ setInterval(() => { if (document.querySelector(".rot") && !$modal.classList.cont
 function renderAdmin() {
   const esAdm = state.rol === "admin";
   if (!esAdm) state.tab = "agenda";
-  const tabs = [["agenda","Agenda"],["tablero","Tablero"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos"],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
+  const tabs = [["agenda","Agenda"],["tablero","Tablero"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos" + ((state.comps || []).length ? " (🧾" + state.comps.length + ")" : "")],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
   const semana = state.tab === "agenda" && state.vista !== "dia";
   const body = {agenda: semana ? vAgendaSemana : vAgenda, tablero: vTablero, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
   document.body.classList.toggle("ancho", semana);
   const prevSem = document.querySelector(".semana"), prevScroll = prevSem && state._semLun === lunesDe(state.agFecha) ? prevSem.scrollLeft : null;
   $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
     ${!esAdm ? avisoHorarioDic() : `<div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${state.tab === k ? "sel" : ""}" data-a="tab" data-t="${k}">${l}</button>`).join("")}</div>`}
+    ${esAdm && state.tab !== "alumnos" && (state.comps || []).length ? `<div class="note acc row between" style="align-items:center;gap:10px"><span>🧾 <b>${state.comps.length === 1 ? "Hay 1 comprobante de pago" : "Hay " + state.comps.length + " comprobantes de pago"}</b> para revisar</span><button class="btn sm" data-a="tab" data-t="alumnos">Revisar</button></div>` : ""}
     ${body}
     ${!esAdm && state.miContrato?.firmadoEn ? `<p class="center small" style="margin:22px 0 8px"><button class="link" data-a="verContrato" data-e="${esc(state.user.email)}">Ver mi contrato firmado</button></p>` : ""}</div>`;
   if (semana) { // vuelve a donde estaba, o muestra primero el día elegido
@@ -1562,7 +1568,7 @@ function vMails() {
     ${(state.plantillas || []).length ? `<div class="card"><b>Mis plantillas</b>${state.plantillas.map(t => `<div class="person"><span class="name">${esc(t.nombre)}<div class="small muted">${esc(t.asunto)}</div></span>
       <button class="x" data-a="mBorrarPl" data-id="${esc(t.id)}" title="Borrar">×</button></div>`).join("")}</div>` : ""}
     <h2>Enviados</h2>
-    ${hist.length ? hist.map(x => `<div class="card row between"><div><b>${esc(x.asunto)}</b><div class="sub">${fmtFecha(x.fecha)} · ${esc((GRUPOS.find(g => g[0] === x.para) || [, ""])[1])}</div></div>${est(x)}</div>`).join("")
+    ${hist.length ? hist.map(x => `<div class="card row between"><div><b>${esc(x.asunto)}</b><div class="sub">${fmtFecha(x.fecha)} · ${esc(x.para === "pago" ? "Pago aprobado · " + (x.total === 1 ? "1 alumno" : (x.total || 0) + " alumnos") : (GRUPOS.find(g => g[0] === x.para) || [, ""])[1])}</div></div>${est(x)}</div>`).join("")
       : `<div class="empty">Todavía no se mandó ningún mail</div>`}`;
 }
 function leerBorrador() {
