@@ -68,6 +68,58 @@
   .slot.full,.slot.blk,.slot.past{opacity:.35}
   .slot.mine{border-color:var(--accent);color:var(--accent)}
   .slot.mine small{color:var(--accent)}
+  .fin{margin-top:8px}
+  .fin .center{text-align:center}
+  .fin-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin:4px 0 2px}
+  .fin-seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px}
+  .fin-seg button{background:transparent;color:var(--muted);padding:8px 16px;border-radius:9px;font-weight:600;font-size:15px}
+  .fin-seg button.sel{background:var(--accent);color:var(--accent-text)}
+  .fin-acc{display:flex;gap:6px}
+  .fin-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin:14px 0 10px}
+  .fin-nav b{min-width:170px;text-align:center;font-size:18px}
+  .fin-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .fin-kpis.tres{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .fin-kpis .card{margin:0;padding:14px 16px;min-width:0}
+  .fin-kt{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+  .fin-kn{font-size:clamp(19px,2.6vw,26px);font-weight:800;margin:4px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+  .fin .pos{color:var(--ok)} .fin .neg{color:var(--bad)}
+  .fin-med{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:13px;margin-top:8px;color:var(--muted)}
+  .fin-med b{color:var(--text);font-variant-numeric:tabular-nums;text-align:right}
+  .fin-add{width:100%;margin:12px 0 0}
+  .ftab{overflow-x:auto;margin:10px 0;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
+  .ftab table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+  .ftab th{background:var(--card2);color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 12px;white-space:nowrap}
+  .ftab td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
+  .ftab .r{text-align:right;white-space:nowrap}
+  .ftab .fd{white-space:nowrap;color:var(--muted)}
+  .ftab .fn{font-weight:600}
+  .ftab .fm{font-weight:700}
+  .ftab .fnt{font-style:italic}
+  .ftab tbody tr{cursor:pointer} .ftab tbody tr:hover{background:var(--card2)}
+  .ftab tr.vacio td{color:var(--muted);opacity:.55}
+  .ftab tr.act td{background:rgba(43,123,255,.10)}
+  .ftab tr.tot td{font-weight:800;background:var(--card2);border-top:2px solid var(--line)}
+  .ftab .cm-m{display:none}
+  .ftab .mc{display:none}
+  .fin-tag{display:inline-block;margin-top:4px;font-size:11px;color:var(--accent2);border:1px solid var(--accent2);border-radius:999px;padding:1px 8px}
+  .fin-cat{padding:16px}
+  .fin-mini{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--muted);margin:4px 0 12px}
+  .fin-mini b{color:var(--text)}
+  .fin-bar{margin:10px 0}
+  .fin-bl{display:flex;justify-content:space-between;gap:10px;font-size:14px;margin-bottom:5px}
+  .fin-bl span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fin-bl b{white-space:nowrap;font-variant-numeric:tabular-nums} .fin-bl small{color:var(--muted);font-weight:500}
+  .fin-bt{height:8px;background:var(--card2);border-radius:99px;overflow:hidden}
+  .fin-bt i{display:block;height:100%;background:var(--accent);border-radius:99px}
+  @media (max-width:600px){
+    .fin-top{justify-content:center}
+    .fin-seg{width:100%} .fin-seg button{flex:1;padding:9px 6px}
+    .fin-acc{width:100%;justify-content:center}
+    .fin-kpis.tres{grid-template-columns:1fr 1fr} .fin-kpis.tres .card:last-child{grid-column:1/-1}
+    .ftab .cm,.ftab .cx{display:none} .ftab .cm-m{display:inline}
+    .ftab td,.ftab th{padding:9px 8px} .ftab table{font-size:13px}
+    .ftab.res td,.ftab.res th{padding:9px 5px} .ftab.res table{font-size:12.5px} .ftab.res .ml{display:none} .ftab.res .mc{display:inline}
+  }
   .note{background:var(--card2);border-left:3px solid var(--warn);padding:10px 12px;border-radius:8px;font-size:14px;margin:8px 0}
   .note.acc{border-left-color:var(--accent)}
   .tabs{display:flex;gap:6px;overflow-x:auto;margin:6px 0 4px}
@@ -409,9 +461,25 @@ function demoBackend() {
       if (pedir && Notification.permission === "default") await Notification.requestPermission();
       return Notification.permission === "granted" ? "ok" : Notification.permission === "denied" ? "bloqueado" : "pendiente";
     },
+    async listFin(y) { if (!S.fin) S.fin = finDemo(); return clone(S.fin.filter(x => x.fecha >= y + "-01-01" && x.fecha <= y + "-12-31")); },
+    async setFin(id, d) { const {id: _, ...x} = d; if (!S.fin) S.fin = finDemo(); S.fin = S.fin.filter(r => r.id !== id); S.fin.push({...clone(x), id}); notify(); },
+    async delFin(id) { S.fin = (S.fin || []).filter(r => r.id !== id); notify(); },
+    async pagosDesde(f) { return []; },
     async getFicha(email) { return email === "carla.demo@gmail.com" ? {fecha: "10/10/2026", nombre: "Carla Ruiz", dni: "30111222", edad: "42", nacimiento: "02/03/1984", telefono: "2995553333", altura: "165", peso: "68", actividad: "No", objetivo: "Tonificar y bajar de peso", condiciones: "Hipertensión", detalle: "Controlada con medicación", medicacion: "Sí", cualMedicacion: "Enalapril", lesion: "No", otra: "", imagen: "Sí", consentimiento: "Sí", firma: "Carla Ruiz", hora: "18:42", firmaImg: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABkAQMAAAAGz5+DAAAABlBMVEX///8LGjovth/2AAACe0lEQVR42u2WsW7UQBCGv7VPZ1fxlVdEstNRUh5SkrsCUfMI4Q1SpkBikaKkocgr8CCgTaBIg5RHWEVIUC4oxQK+M4Xt3fU5FyxEQXFT2eN///1ndmbWsLWtbW1r/7El9/iiv2aL5b9kEwoQf2I7BGAsH4aJy6oYoK1xpIt7vIeB51peABR9WHbplYzUAmBn0odNOPaeEoBf96RgjvVHJfQMmJ302d5xtn6idtSDiZK3XlzFZ2Ch+mxfMS7+HS4AzG0PFmnuApf6DkjRg41gVfhAUwBt5DpsqsClqUA8AYEFRKXXDttl5Jj8CwgZK0gqG7CtgNMWJmECERQwYxywnYSnasgqSYzQiJIsUGiBvK0jTfZKkoAh1sTGV5gBt0xoolwxBkuiakG1tsgAtslvpFkZSOGUqYI9H4IGyqC+bMEKFIWEJn0RjBSOHBSUMIFbDgB75GpC1hG6AhGWKeRYCGJIXLjADsBLZpDVCNtumrRprQu5XWTf3ODyHrWyPgZz4YoF8FwBfGg33fXNlev9uuiPIK6XZ936zAHmVQmQSw2i7p1Ed2CZBMq5BciVcuKF6XS9Bbi7uQYwe37YVGkHVi4A860+s6nyX867M6QA0eiwY2C3acGLTrULC6LxJHNg/h4fg2OrToOXGwkHL+rnn7udUPchbqfvuULYzPV3qO0W3EBICyJrGwmFWstv2yDikyVRSTCLPZuRdSMDZM84Ue3sqjqhJrquIgCbVdWG2VtOPIw7fmyALdOgc5cy3TTJzwgy9Hrj7TJnNuyCfLzxW7BpKRdDYIRj/wGYYBAsGgRbPdWD2B6pQbdyNez2Xj3wmxA8L6+2P2FbW7ff1yWxn8fiRjwAAAAASUVORK5CYII="} : null; }
   };
   return api;
+}
+// Movimientos de ejemplo para el modo demo
+function finDemo() {
+  const y = hoy().slice(0, 4), m = hoy().slice(0, 7), out = [];
+  [["01", "Carla Ruiz", "Transferencia", 180000], ["03", "Lucía Gómez", "Efectivo", 150000], ["05", "Diego Sosa", "Suscripción MP", 391000], ["08", "Ana Pérez", "Transferencia", 230000]]
+    .forEach(([d, n, med, mo], i) => out.push({id: "i" + i, tipo: "ingreso", fecha: m + "-" + d, nombre: n, medio: med, monto: mo, notas: "", origen: "manual"}));
+  [["02", "Lore", "Alquiler", "Débito", 1200000], ["04", "Sancor", "Seguro", "Débito", 56841], ["06", "Viví", "Limpieza", "Efectivo", 40000]]
+    .forEach(([d, n, c, med, mo], i) => out.push({id: "g" + i, tipo: "gasto", fecha: m + "-" + d, nombre: n, categoria: c, medio: med, monto: mo, notas: "", origen: "manual"}));
+  const prev = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5)) - 2, 1)).toISOString().slice(0, 7);
+  out.push({id: "i9", tipo: "ingreso", fecha: prev + "-10", nombre: "Carla Ruiz", medio: "Transferencia", monto: 2900000, notas: "Total del mes (ejemplo)", origen: "manual"});
+  out.push({id: "g9", tipo: "gasto", fecha: prev + "-10", nombre: "Lore", categoria: "Alquiler", medio: "Débito", monto: 1800000, notas: "", origen: "manual"});
+  return out.filter(x => x.fecha.startsWith(y) || x.fecha.startsWith(prev));
 }
 function seedDemo() {
   const h = hoy(); const cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
@@ -634,6 +702,10 @@ async function firebaseBackend() {
       return "ok";
     },
     // Ficha médica: la copia el programa de la planilla de respuestas del Google Form (colección "fichas", por mail)
+    async listFin(y) { return (await getDocs(query(collection(db, "finanzas"), where("fecha", ">=", y + "-01-01"), where("fecha", "<=", y + "-12-31")))).docs.map(d => ({id: d.id, ...d.data()})); },
+    async setFin(id, d) { const {id: _, ...x} = d; Object.keys(x).forEach(k => x[k] === undefined && delete x[k]); await setDoc(doc(db, "finanzas", id), x); },
+    async delFin(id) { await deleteDoc(doc(db, "finanzas", id)); },
+    async pagosDesde(f) { try { return (await getDocs(query(collection(db, "pagos"), where("fecha", ">=", f)))).docs.map(d => ({id: d.id, ...d.data()})); } catch (e) { console.warn(e); return []; } },
     async getFicha(email) { if (!email) return null; try { const s = await getDoc(doc(db, "fichas", String(email).trim().toLowerCase())); return s.exists() ? s.data() : null; } catch (e) { console.warn(e); return null; } }
   };
 }
@@ -1047,6 +1119,8 @@ async function aprobarComprobante(id) {
   if (await run(async () => {
     await state.B.saveAlumno({...a, inicio, vence, activo: true});
     await state.B.resolverComprobante(id, {estado: "aprobado", inicio, vence, revisado: h});
+    if (c.monto > 0) await finAuto("comp_" + id, {tipo: "ingreso", fecha: h, nombre: a.nombre || a.email, dni: "", medio: "Transferencia", monto: Number(c.monto),
+      notas: "Comprobante aprobado" + (c.nota ? " · " + c.nota : ""), origen: "app"});
     // mail automático: lo manda el programa de avisos desde el Gmail del gimnasio (igual que los mails masivos)
     if (avisar) await state.B.crearDifusion({asunto: "Tu pago fue aprobado ✅", boton: true, para: "pago", fecha: h, ts: Date.now(),
       cuerpo: `¡Hola {nombre}!\n\nRecibimos tu pago y ya renovamos tu plan: queda vigente hasta el ${fmtFecha(vence)}.\n\nYa podés reservar tus turnos desde la app.\n\n¡Gracias por entrenar en PowerFit!`,
@@ -1164,9 +1238,9 @@ setInterval(() => { if (document.querySelector(".rot") && !$modal.classList.cont
 function renderAdmin() {
   const esAdm = state.rol === "admin";
   if (!esAdm) state.tab = "agenda";
-  const tabs = [["agenda","Agenda"],["tablero","Tablero"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos" + ((state.comps || []).length ? " (🧾" + state.comps.length + ")" : "")],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
+  const tabs = [["agenda","Agenda"],["tablero","Tablero"],["finanzas","Finanzas"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos" + ((state.comps || []).length ? " (🧾" + state.comps.length + ")" : "")],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
   const semana = state.tab === "agenda" && state.vista !== "dia";
-  const body = {agenda: semana ? vAgendaSemana : vAgenda, tablero: vTablero, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
+  const body = {agenda: semana ? vAgendaSemana : vAgenda, tablero: vTablero, finanzas: vFinanzas, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
   document.body.classList.toggle("ancho", semana);
   const prevSem = document.querySelector(".semana"), prevScroll = prevSem && state._semLun === lunesDe(state.agFecha) ? prevSem.scrollLeft : null;
   $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
@@ -1336,7 +1410,12 @@ async function registrarPago(id) {
     if (!(monto > 0)) return toast("Poné el monto");
     v = {monto, concepto: box.querySelector("[name=concepto]").value, nota: box.querySelector("[name=nota]").value.trim(), por: state.user.email, cuando: Date.now()};
   }
-  if (await run(() => state.B.setPago(r, v), quitar ? "Pago quitado" : "Pago registrado")) { await cargarAdmin(); renderAdmin(); }
+  if (await run(() => state.B.setPago(r, v), quitar ? "Pago quitado" : "Pago registrado")) {
+    // también queda como ingreso en Finanzas
+    await finAuto("ef_" + r.id, v ? {tipo: "ingreso", fecha: r.fecha, nombre: nombreRes(r), dni: "", medio: "Efectivo", monto: v.monto,
+      notas: [v.concepto, v.nota].filter(Boolean).join(" · "), origen: "efectivo", por: state.user.email} : null);
+    await cargarAdmin(); renderAdmin();
+  }
 }
 const nombreEquipo = email => (state.profesList || []).find(p => p.email === email)?.nombre || email;
 function vPruebas() {
@@ -1364,6 +1443,247 @@ function statsAlumno(email) {
   return {usadas: rs.length, vino: rs.filter(r => r.asistencia === true).length, falto: rs.filter(r => r.asistencia === false).length};
 }
 /* ---------- Tablero de indicadores (solo dueñas) ---------- */
+/* ============================ FINANZAS (solo dueñas) ============================ */
+// Ingresos, gastos y resumen mensual, como el Excel "CONTROL FINANCIERO POWERFIT".
+// Se guardan en la colección "finanzas". Los cobros de la app se suman solos como ingresos:
+//   ef_<reserva>  efectivo que carga la profe o la dueña en la agenda
+//   comp_<id>     comprobante de transferencia aprobado
+//   mp_<id>       débito de Mercado Pago (desde FIN_DESDE, porque lo anterior ya está en el Excel)
+//   xi_/xg_<fila> filas importadas del Excel (si se vuelve a importar, se pisan las mismas filas)
+const FIN_DESDE = "2026-11-15";
+const MESES_F = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const MEDIOS_ING = ["Transferencia", "Efectivo", "Suscripción MP", "Mercado Pago", "Otro"];
+const MEDIOS_GAS = ["Débito", "Efectivo", "Transferencia", "Crédito", "Mercado Pago", "Otro"];
+const CATS_GAS = ["Alquiler", "Empleada", "Servicios", "Agua", "Internet", "Celular", "Limpieza", "Seguro", "Monotributo", "Impuestos", "Marketing", "Mantenimiento", "Insumos", "Equipamiento", "Varios"];
+const ORIGEN_TXT = {efectivo: "Cargado desde la agenda (efectivo)", app: "Comprobante aprobado en la app", mp: "Débito de Mercado Pago", excel: "Importado del Excel"};
+const finCache = {}; // año -> movimientos
+const finMesAct = () => state.finMes || hoy().slice(0, 7);
+const finAnioAct = () => state.finAnio || hoy().slice(0, 4);
+const finVivos = y => (finCache[y] || []).filter(x => !x.ignorado);
+const capi = s => { s = String(s || "").trim(); return s ? s[0].toUpperCase() + s.slice(1) : ""; };
+
+async function cargarFin(y, forzar) {
+  if (!finCache[y] || forzar) finCache[y] = await state.B.listFin(y);
+  return finCache[y];
+}
+// Débitos de Mercado Pago nuevos -> ingresos (una sola vez cada uno)
+async function sincronizarMp() {
+  const pagos = (await state.B.pagosDesde(FIN_DESDE)).filter(p => p.fecha && p.monto > 0 && (!p.estado || p.estado === "approved"));
+  for (const p of pagos) {
+    const y = p.fecha.slice(0, 4), id = "mp_" + p.id;
+    await cargarFin(y);
+    if (finCache[y].some(x => x.id === id)) continue;
+    const a = state.alumnos.find(x => x.email === p.email) || state.alumnos.find(x => p.suscripcion && x.mpSuscripcion === p.suscripcion);
+    const d = {tipo: "ingreso", fecha: p.fecha, nombre: a?.nombre || p.email || "Mercado Pago", dni: "", medio: "Suscripción MP", monto: Number(p.monto),
+      notas: "Débito automático de Mercado Pago", origen: "mp"};
+    try { await state.B.setFin(id, d); finCache[y].push({...d, id}); } catch (e) { console.warn("finanzas mp", e); }
+  }
+}
+async function abrirFinanzas(forzar) {
+  try {
+    const ys = [...new Set([finAnioAct(), finMesAct().slice(0, 4)])];
+    await Promise.all(ys.map(y => cargarFin(y, forzar)));
+    await sincronizarMp();
+  } catch (e) { console.error(e); toast(traducirError(e)); }
+}
+// Lo llaman la agenda (efectivo) y la aprobación de comprobantes: si falla, no frena lo demás
+async function finAuto(id, d) {
+  try {
+    if (d) await state.B.setFin(id, d); else await state.B.delFin(id);
+    const y = (d?.fecha || "").slice(0, 4);
+    Object.keys(finCache).forEach(k => finCache[k] = finCache[k].filter(x => x.id !== id));
+    if (d && finCache[y]) finCache[y].push({...d, id});
+  } catch (e) { console.warn("finanzas", e); }
+}
+
+function vFinanzas() {
+  const sub = state.finSub || "ingresos", mes = finMesAct(), anio = finAnioAct();
+  const seg = [["ingresos", "Ingresos"], ["gastos", "Gastos"], ["resumen", "Resumen"]]
+    .map(([k, l]) => `<button class="${sub === k ? "sel" : ""}" data-a="finSub" data-s="${k}">${l}</button>`).join("");
+  return `<div class="fin">
+    <div class="fin-top"><div class="fin-seg" role="tablist">${seg}</div>
+      <div class="fin-acc"><button class="btn sec sm" data-a="finExcel" title="Descargar Excel">⬇ Excel</button><button class="btn sec sm" data-a="finImport" title="Importar Excel">⬆ Importar</button><button class="btn sec sm" data-a="finRefresh" aria-label="Actualizar">↻</button></div></div>
+    ${sub === "resumen" ? finResumen(anio) : finLista(sub === "gastos" ? "gasto" : "ingreso", mes)}</div>`;
+}
+
+function finNav(txt, a) {
+  return `<div class="fin-nav"><button class="btn sec sm" data-a="${a}" data-d="-1" aria-label="Anterior">‹</button><b>${txt}</b><button class="btn sec sm" data-a="${a}" data-d="1" aria-label="Siguiente">›</button></div>`;
+}
+const finMonto = n => n < 0 ? "−" + plata(-n) : plata(n);
+
+function finLista(tipo, mes) {
+  const y = mes.slice(0, 4), ing = tipo === "ingreso", [yy, mm] = mes.split("-").map(Number);
+  const nav = finNav(`${MESES_F[mm - 1]} ${yy}`, "finMes");
+  if (!finCache[y]) return nav + `<div class="card sub center">Cargando…</div>`;
+  const rows = finVivos(y).filter(x => x.tipo === tipo && (x.fecha || "").startsWith(mes))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || String(b.id).localeCompare(String(a.id)));
+  const total = rows.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+  const porMedio = {}; rows.forEach(x => { const k = capi(x.medio) || "Sin medio"; porMedio[k] = (porMedio[k] || 0) + (Number(x.monto) || 0); });
+  const auto = x => ["mp", "efectivo", "app"].includes(x.origen) ? `<span class="fin-tag">${x.origen === "mp" ? "MP · automático" : x.origen === "efectivo" ? "Agenda · automático" : "Comprobante · automático"}</span>` : "";
+  return `${nav}
+    <div class="fin-kpis">
+      <div class="card"><div class="fin-kt">${ing ? "Ingresos" : "Gastos"} del mes</div><div class="fin-kn">${plata(total)}</div>
+        <div class="sub">${rows.length} ${ing ? (rows.length === 1 ? "cobro" : "cobros") : (rows.length === 1 ? "pago" : "pagos")}</div></div>
+      <div class="card"><div class="fin-kt">Por medio de pago</div><div class="fin-med">${Object.entries(porMedio).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><b>${plata(v)}</b>`).join("") || `<span class="sub">—</span>`}</div></div>
+    </div>
+    <button class="btn fin-add" data-a="finNuevo" data-t="${tipo}">+ Agregar ${ing ? "ingreso" : "gasto"}</button>
+    ${rows.length ? `<div class="ftab"><table><thead><tr><th>Fecha</th><th>${ing ? "Cliente" : "Proveedor"}</th><th class="cm">Medio</th><th class="r">Monto</th></tr></thead><tbody>
+      ${rows.map(x => `<tr data-a="finEdit" data-id="${esc(x.id)}" data-y="${y}">
+        <td class="fd">${fmtDM(x.fecha)}</td>
+        <td><div class="fn">${esc(x.nombre || "—")}</div>
+          <div class="sub">${[!ing && x.categoria ? capi(x.categoria) : "", `<span class="cm-m">${esc(capi(x.medio))}</span>`].filter(Boolean).join(" · ")}</div>
+          ${x.notas ? `<div class="sub fnt">${esc(x.notas)}</div>` : ""}${auto(x)}</td>
+        <td class="cm">${esc(capi(x.medio))}</td><td class="r fm">${plata(Number(x.monto) || 0)}</td></tr>`).join("")}
+      </tbody></table></div>` : `<div class="card sub center">No hay ${ing ? "ingresos" : "gastos"} cargados en ${MESES_F[mm - 1].toLowerCase()}.</div>`}`;
+}
+
+function finResumen(anio) {
+  const nav = finNav("Resumen " + anio, "finAnio");
+  if (!finCache[anio]) return nav + `<div class="card sub center">Cargando…</div>`;
+  const xs = finVivos(anio), mesSel = finMesAct().startsWith(anio) ? finMesAct() : anio + "-" + hoy().slice(5, 7);
+  const filas = MESES_F.map((n, i) => {
+    const m = anio + "-" + String(i + 1).padStart(2, "0");
+    const ing = xs.filter(x => x.tipo === "ingreso" && x.fecha.startsWith(m)), gas = xs.filter(x => x.tipo === "gasto" && x.fecha.startsWith(m));
+    const I = ing.reduce((t, x) => t + (Number(x.monto) || 0), 0), G = gas.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+    return {n, m, I, G, N: I - G, mg: I ? (I - G) / I : 0, v: ing.length};
+  });
+  const T = filas.reduce((t, f) => ({I: t.I + f.I, G: t.G + f.G, v: t.v + f.v}), {I: 0, G: 0, v: 0});
+  const pct = v => (v * 100).toFixed(1).replace(".", ",") + "%";
+  const neto = n => n ? `<span class="${n < 0 ? "neg" : "pos"}">${finMonto(n)}</span>` : plata(0);
+  const cats = {}; xs.filter(x => x.tipo === "gasto" && x.fecha.startsWith(mesSel)).forEach(x => {
+    const k = String(x.categoria || "Sin categoría").trim().toLowerCase(); cats[k] = cats[k] || {n: capi(x.categoria) || "Sin categoría", v: 0}; cats[k].v += Number(x.monto) || 0; });
+  const cl = Object.values(cats).sort((a, b) => b.v - a.v), totC = cl.reduce((t, c) => t + c.v, 0) || 1, maxC = cl[0]?.v || 1;
+  const fm = filas[Number(mesSel.slice(5)) - 1];
+  return `${nav}
+    <div class="fin-kpis tres">
+      <div class="card"><div class="fin-kt">Ingresos del año</div><div class="fin-kn">${plata(T.I)}</div><div class="sub">${T.v} ventas</div></div>
+      <div class="card"><div class="fin-kt">Gastos del año</div><div class="fin-kn">${plata(T.G)}</div><div class="sub">&nbsp;</div></div>
+      <div class="card"><div class="fin-kt">Ganancia neta</div><div class="fin-kn ${T.I - T.G < 0 ? "neg" : "pos"}">${finMonto(T.I - T.G)}</div><div class="sub">Margen ${pct(T.I ? (T.I - T.G) / T.I : 0)}</div></div>
+    </div>
+    <div class="ftab res"><table><thead><tr><th>Mes</th><th class="r">Ingresos</th><th class="r">Gastos</th><th class="r">Ganancia</th><th class="r cx">Margen</th><th class="r cx">Ventas</th></tr></thead><tbody>
+      ${filas.map(f => `<tr class="${f.I || f.G ? "" : "vacio"} ${f.m === mesSel ? "act" : ""}" data-a="finVerMes" data-m="${f.m}"><td><span class="ml">${f.n}</span><span class="mc">${f.n.slice(0, 3)}</span></td><td class="r">${plata(f.I)}</td><td class="r">${plata(f.G)}</td><td class="r">${neto(f.N)}</td><td class="r cx">${f.I ? pct(f.mg) : "—"}</td><td class="r cx">${f.v || "—"}</td></tr>`).join("")}
+      <tr class="tot"><td>Total</td><td class="r">${plata(T.I)}</td><td class="r">${plata(T.G)}</td><td class="r">${neto(T.I - T.G)}</td><td class="r cx">${pct(T.I ? (T.I - T.G) / T.I : 0)}</td><td class="r cx">${T.v}</td></tr>
+    </tbody></table></div>
+    <p class="sub center" style="margin:6px 0 0">Tocá un mes para ver sus gastos por categoría.</p>
+    <div class="card fin-cat"><div class="fin-kt">Gastos por categoría</div><b style="font-size:17px">${fm.n} ${anio}</b>
+      <div class="fin-mini"><span>Ingresos <b>${plata(fm.I)}</b></span><span>Gastos <b>${plata(fm.G)}</b></span><span>Ganancia <b>${neto(fm.N)}</b></span></div>
+      ${cl.length ? cl.map(c => `<div class="fin-bar"><div class="fin-bl"><span>${esc(c.n)}</span><b>${plata(c.v)} <small>${Math.round(c.v / totC * 100)}%</small></b></div><div class="fin-bt"><i style="width:${Math.max(2, Math.round(c.v / maxC * 100))}%"></i></div></div>`).join("") : `<div class="sub" style="margin-top:8px">Sin gastos cargados</div>`}</div>`;
+}
+
+async function finEditar(id, tipo, y) {
+  const x = id ? (finCache[y] || []).find(r => r.id === id) : null;
+  tipo = x ? x.tipo : tipo;
+  const ing = tipo === "ingreso", all = Object.values(finCache).flat();
+  const lista = (nm, vals) => `<datalist id="${nm}">${[...new Set(vals.map(v => capi(v).replace(/\s+$/, "")).filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join("")}</datalist>`;
+  const fechaIni = x?.fecha || (finMesAct() === hoy().slice(0, 7) ? hoy() : finMesAct() + "-01");
+  const box = await modal({title: (x ? "Editar " : "Nuevo ") + (ing ? "ingreso" : "gasto"), ok: "Guardar", html: `
+    ${x?.origen && ORIGEN_TXT[x.origen] ? `<div class="note acc small">${ORIGEN_TXT[x.origen]}</div>` : ""}
+    <div class="grid2"><div><label>Fecha</label><input type="date" name="fecha" value="${esc(fechaIni)}"></div>
+    <div><label>Monto ($)</label><input name="monto" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(x?.monto ?? "")}"></div></div>
+    <label>${ing ? "Cliente" : "Proveedor"}</label><input name="nombre" list="dlNom" value="${esc(x?.nombre || "")}" autocomplete="off">
+    ${lista("dlNom", ing ? state.alumnos.filter(a => a.activo).map(a => a.nombre) : all.filter(r => r.tipo === "gasto").map(r => r.nombre))}
+    ${ing ? `<label>DNI (opcional)</label><input name="dni" inputmode="numeric" value="${esc(x?.dni || "")}">`
+      : `<label>Categoría</label><input name="categoria" list="dlCat" value="${esc(x?.categoria || "")}" autocomplete="off">${lista("dlCat", CATS_GAS.concat(all.filter(r => r.tipo === "gasto").map(r => r.categoria)))}`}
+    <label>Medio de pago</label><input name="medio" list="dlMed" value="${esc(x?.medio || "")}" autocomplete="off">${lista("dlMed", ing ? MEDIOS_ING : MEDIOS_GAS)}
+    <label>Notas</label><input name="notas" value="${esc(x?.notas || "")}">
+    ${x ? `<button class="btn bad sm" style="margin-top:12px" data-borrar="1">Borrar este ${ing ? "ingreso" : "gasto"}</button>` : ""}`,
+    onOpen: b => { const q = b.querySelector("[data-borrar]"); if (q) q.onclick = ev => { ev.preventDefault(); b.dataset.borrar = "1"; b.querySelector('[data-m="1"]').click(); }; }});
+  if (!box) return;
+  if (box.dataset.borrar === "1") {
+    delete box.dataset.borrar;
+    if (!(await modal({title: "¿Borrar?", html: `<p>${esc(x.nombre || "")} · ${plata(Number(x.monto) || 0)} · ${fmtFecha(x.fecha)}</p>`, ok: "Borrar", danger: true}))) return;
+    // los débitos de MP se marcan como ignorados (si no, se volverían a sumar solos)
+    const ok = await run(() => x.origen === "mp" ? state.B.setFin(x.id, {...x, ignorado: true}) : state.B.delFin(x.id), "Borrado");
+    if (ok) { if (x.origen === "mp") x.ignorado = true; else finCache[y] = finCache[y].filter(r => r.id !== x.id); renderAdmin(); }
+    return;
+  }
+  const v = n => (box.querySelector(`[name=${n}]`)?.value || "").trim();
+  const d = {tipo, fecha: v("fecha"), nombre: v("nombre"), medio: v("medio"), monto: Number(v("monto")), notas: v("notas")};
+  if (ing) d.dni = v("dni"); else d.categoria = v("categoria");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha)) return toast("Elegí la fecha");
+  if (!(d.monto > 0)) return toast("Poné el monto");
+  if (!d.nombre) return toast(ing ? "Poné el nombre del cliente" : "Poné el proveedor");
+  if (x) { d.origen = x.origen || ""; ["concepto", "categoriaIng", "plan"].forEach(k => { if (x[k] != null) d[k] = x[k]; }); }
+  else d.origen = "manual";
+  d.por = state.user.email; d.editado = Date.now();
+  const nid = x ? x.id : (tipo === "gasto" ? "g_" : "i_") + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  if (await run(() => state.B.setFin(nid, d), "Guardado")) {
+    Object.keys(finCache).forEach(k => finCache[k] = finCache[k].filter(r => r.id !== nid));
+    const ny = d.fecha.slice(0, 4); await cargarFin(ny); if (!finCache[ny].some(r => r.id === nid)) finCache[ny].push({...d, id: nid});
+    state.finMes = d.fecha.slice(0, 7); renderAdmin();
+  }
+}
+
+/* --------- Excel (SheetJS, se carga solo cuando se usa) --------- */
+let XLSXmod = null;
+async function xlsxLib() { if (!XLSXmod) XLSXmod = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"); return XLSXmod; }
+const serialAFecha = n => new Date(Math.round((n - 25569) * 864e5)).toISOString().slice(0, 10);
+function celdaFecha(v) {
+  if (typeof v === "number" && v > 20000 && v < 80000) return serialAFecha(v);
+  const s = String(v ?? "").trim(); let m;
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[0];
+  if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return "";
+}
+const celdaTxt = v => v == null ? "" : typeof v === "number" ? String(Math.round(v * 100) / 100) : String(v).trim();
+function leerHojaFin(XLSX, wb, nombre, tipo) {
+  const ws = wb.Sheets[Object.keys(wb.Sheets).find(k => k.trim().toLowerCase() === nombre) || ""];
+  if (!ws) return {ok: [], raras: []};
+  const filas = XLSX.utils.sheet_to_json(ws, {header: 1, raw: true, blankrows: true}), ok = [], raras = [];
+  filas.forEach((r, i) => {
+    if (i < 3) return; // títulos y encabezados (como en el Excel: los datos empiezan en la fila 4)
+    const fecha = celdaFecha(r[0]), monto = Number(tipo === "ingreso" ? r[7] : r[4]);
+    if (!fecha && !(monto > 0)) return;
+    const fila = i + 1;
+    if (!fecha || !(monto > 0)) { raras.push(fila); return; }
+    const d = tipo === "ingreso"
+      ? {tipo, fecha, nombre: celdaTxt(r[1]), concepto: celdaTxt(r[2]), categoriaIng: celdaTxt(r[3]), plan: celdaTxt(r[4]), dni: celdaTxt(r[5]), medio: celdaTxt(r[6]), monto, notas: celdaTxt(r[8])}
+      : {tipo, fecha, nombre: celdaTxt(r[1]), categoria: celdaTxt(r[2]), medio: celdaTxt(r[3]), monto, notas: celdaTxt(r[5])};
+    d.origen = "excel"; d.fila = fila;
+    ok.push({id: (tipo === "ingreso" ? "xi_" : "xg_") + fila, d});
+  });
+  return {ok, raras};
+}
+async function finImportar() {
+  const box = await modal({title: "Importar el Excel", ok: "Leer", html: `<p class="sub">Elegí el archivo <b>CONTROL FINANCIERO POWERFIT</b> (.xlsx). Se leen las hojas <b>Ingresos</b> y <b>Gastos</b> tal como están. Si lo volvés a importar, se actualizan las mismas filas sin duplicarse.</p>
+    <input type="file" name="f" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">`});
+  if (!box) return;
+  const file = box.querySelector("[name=f]").files[0]; if (!file) return toast("Elegí el archivo");
+  let I, G;
+  try {
+    const XLSX = await xlsxLib(), wb = XLSX.read(await file.arrayBuffer(), {type: "array"});
+    I = leerHojaFin(XLSX, wb, "ingresos", "ingreso"); G = leerHojaFin(XLSX, wb, "gastos", "gasto");
+  } catch (e) { console.error(e); return toast("No pude leer el archivo: " + (e.message || e)); }
+  const todo = I.ok.concat(G.ok); if (!todo.length) return toast("No encontré filas en las hojas Ingresos y Gastos");
+  const rango = l => l.length ? fmtFecha(l.map(x => x.d.fecha).sort()[0]) + " al " + fmtFecha(l.map(x => x.d.fecha).sort().pop()) : "—";
+  const suma = l => plata(l.reduce((t, x) => t + x.d.monto, 0));
+  const raras = todo.filter(x => x.d.fecha < "2025-01-01" || x.d.fecha > addDays(hoy(), 400));
+  const ok = await modal({title: "¿Importar?", ok: "Importar", html: `<p><b>${I.ok.length} ingresos</b> (${rango(I.ok)}) · ${suma(I.ok)}<br><b>${G.ok.length} gastos</b> (${rango(G.ok)}) · ${suma(G.ok)}</p>
+    ${raras.length ? `<div class="note small">Ojo, ${raras.length === 1 ? "hay 1 fila" : "hay " + raras.length + " filas"} con fecha rara: ${raras.map(x => (x.d.tipo === "ingreso" ? "Ingresos" : "Gastos") + " fila " + x.d.fila + " (" + fmtFecha(x.d.fecha) + ")").join(", ")}. Se importan igual; después las podés corregir.</div>` : ""}
+    ${I.raras.length + G.raras.length ? `<div class="note small">No importo ${I.raras.length + G.raras.length} fila(s) sin fecha o sin monto: ${I.raras.map(f => "Ingresos " + f).concat(G.raras.map(f => "Gastos " + f)).join(", ")}.</div>` : ""}`});
+  if (!ok) return;
+  toast("Importando…");
+  const done = await run(async () => { for (let i = 0; i < todo.length; i += 25) await Promise.all(todo.slice(i, i + 25).map(x => state.B.setFin(x.id, x.d))); }, `Listo: ${todo.length} movimientos importados`);
+  if (done) { Object.keys(finCache).forEach(k => delete finCache[k]); await abrirFinanzas(); renderAdmin(); }
+}
+async function finExportar() {
+  const y = finAnioAct();
+  try {
+    await cargarFin(y);
+    const XLSX = await xlsxLib(), xs = finVivos(y).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const fch = f => f ? f.split("-").reverse().join("/") : "";
+    const ing = xs.filter(x => x.tipo === "ingreso").map(x => ({Fecha: fch(x.fecha), Cliente: x.nombre || "", DNI: x.dni || "", "Medio de pago": x.medio || "", Monto: Number(x.monto) || 0, Notas: x.notas || "", Origen: ORIGEN_TXT[x.origen] || "Cargado a mano"}));
+    const gas = xs.filter(x => x.tipo === "gasto").map(x => ({Fecha: fch(x.fecha), Proveedor: x.nombre || "", "Categoría": x.categoria || "", "Medio de pago": x.medio || "", Monto: Number(x.monto) || 0, Notas: x.notas || ""}));
+    const res = MESES_F.map((n, i) => { const m = y + "-" + String(i + 1).padStart(2, "0");
+      const I = xs.filter(x => x.tipo === "ingreso" && x.fecha.startsWith(m)), G = xs.filter(x => x.tipo === "gasto" && x.fecha.startsWith(m));
+      const si = I.reduce((t, x) => t + (Number(x.monto) || 0), 0), sg = G.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+      return {Mes: n, Ingresos: si, Gastos: sg, "Ganancia neta": si - sg, Margen: si ? Math.round((si - sg) / si * 1000) / 10 + "%" : "0%", Ventas: I.length}; });
+    const wb = XLSX.utils.book_new();
+    [["Ingresos", ing], ["Gastos", gas], ["Resumen", res]].forEach(([n, d]) => { const ws = XLSX.utils.json_to_sheet(d); ws["!cols"] = Object.keys(d[0] || {Fecha: 1}).map(k => ({wch: Math.max(10, k.length + 4, ...d.map(r => String(r[k] ?? "").length + 2).slice(0, 300))})); XLSX.utils.book_append_sheet(wb, ws, n); });
+    XLSX.writeFile(wb, `PowerFit finanzas ${y}.xlsx`);
+  } catch (e) { console.error(e); toast("No se pudo armar el Excel: " + (e.message || e)); }
+}
+
 function vTablero() {
   const H = hoy(), cfg = state.cfg, rs = (state.resRango || []).filter(r => !esPrueba(r));
   const sinPlan = a => !a.plan || a.sinRestricciones;
@@ -1847,7 +2167,17 @@ document.addEventListener("click", async e => {
       if (await modal({title: "¿Cancelar turno?", html: `<p>${fmtLargo(r.fecha)} a las ${r.hora}</p>`, ok: "Sí, cancelar", cancel: "No", danger: true})) {
         await run(() => B.cancelar(r), "Turno cancelado"); state.cambiando = null; await refrescarMis(); }
       break; }
-    case "tab": state.tab = el.dataset.t; renderAdmin(); break;
+    case "tab": state.tab = el.dataset.t; if (state.tab === "finanzas") { renderAdmin(); await abrirFinanzas(); } renderAdmin(); break;
+    case "finSub": state.finSub = el.dataset.s; renderAdmin(); break;
+    case "finMes": { const [y, m] = finMesAct().split("-").map(Number), d = new Date(Date.UTC(y, m - 1 + Number(el.dataset.d), 1));
+      state.finMes = d.toISOString().slice(0, 7); if (!finCache[state.finMes.slice(0, 4)]) { renderAdmin(); await cargarFin(state.finMes.slice(0, 4)).catch(e => toast(traducirError(e))); } renderAdmin(); break; }
+    case "finAnio": state.finAnio = String(Number(finAnioAct()) + Number(el.dataset.d)); if (!finCache[state.finAnio]) { renderAdmin(); await cargarFin(state.finAnio).catch(e => toast(traducirError(e))); } renderAdmin(); break;
+    case "finVerMes": state.finMes = el.dataset.m; renderAdmin(); break;
+    case "finNuevo": finEditar(null, el.dataset.t); break;
+    case "finEdit": finEditar(el.dataset.id, null, el.dataset.y); break;
+    case "finExcel": finExportar(); break;
+    case "finImport": finImportar(); break;
+    case "finRefresh": await abrirFinanzas(true); renderAdmin(); toast("Actualizado"); break;
     case "agMove": state.agFecha = addDays(state.agFecha, Number(el.dataset.d)); await cargarAdmin(); renderAdmin(); break;
     case "agHoy": state.agFecha = hoy(); await cargarAdmin(); renderAdmin(); break;
     case "refresh": await cargarAdmin(); renderAdmin(); toast("Actualizado"); break;
