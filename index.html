@@ -1669,6 +1669,7 @@ async function finEditar(id, tipo, y) {
   if (!d.nombre) return toast(ing ? "Poné el nombre del cliente" : "Poné el proveedor");
   if (x) { d.origen = x.origen || ""; ["concepto", "categoriaIng", "plan", "alumnoEmail"].forEach(k => { if (x[k] != null) d[k] = x[k]; }); }
   else d.origen = "manual";
+  if (!x && ing && !(await confirmarSinDuplicar({nombre: d.nombre, fecha: d.fecha, monto: d.monto}))) return;
   d.por = state.user.email; d.editado = Date.now();
   const nid = x ? x.id : (tipo === "gasto" ? "g_" : "i_") + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   if (await run(() => state.B.setFin(nid, d), "Guardado")) {
@@ -1939,8 +1940,9 @@ async function editarAlumno(email, prefill) {
   if (!a && alumnoDe(nuevo.email)) return toast("Ya existe un alumno con ese mail");
   const pMonto = Number(g("pagoMonto").value), pFecha = fechaEscrita(g("pagoFecha").value), pMedio = g("pagoMedio").value.trim() || "Transferencia";
   if (pMonto > 0 && !pFecha) return toast("Revisá la fecha del pago: escribila como 15/11/2026");
+  const cargarPago = pMonto > 0 && await confirmarSinDuplicar({nombre: nuevo.nombre, email: nuevo.email, fecha: pFecha, monto: pMonto});
   if (await run(() => state.B.saveAlumno(nuevo), "Guardado")) {
-    if (pMonto > 0) {
+    if (cargarPago) {
       const plan = PLANES.find(x => x.id === nuevo.plan), forma = PAGOS.find(x => x.id === nuevo.pago);
       await finAuto("al_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), {tipo: "ingreso", fecha: pFecha, nombre: nuevo.nombre || nuevo.email,
         alumnoEmail: nuevo.email, dni: "", medio: pMedio, monto: pMonto, origen: "alumno", por: state.user.email,
@@ -1949,6 +1951,20 @@ async function editarAlumno(email, prefill) {
     }
     await cargarAdmin(); renderAdmin();
   }
+}
+// Aviso de posible pago repetido: mismo alumno/a (por mail o nombre) con un ingreso 20 días antes o después
+async function confirmarSinDuplicar({nombre, email, fecha, monto, excluirId}) {
+  try { await cargarFinTodo(); } catch (e) { return true; }
+  const nom = sinTildes(nombre || "").trim(), mail = String(email || "").toLowerCase(), t0 = Date.parse(fecha + "T12:00");
+  const xs = Object.values(finCache).flat().filter(x => x.tipo === "ingreso" && !x.ignorado && x.id !== excluirId
+    && ((mail && x.alumnoEmail === mail) || (nom.length > 3 && (sinTildes(x.nombre || "").includes(nom) || nom.includes(sinTildes(x.nombre || "").trim() || "\u0000"))))
+    && Math.abs(Date.parse(x.fecha + "T12:00") - t0) <= 20 * 864e5)
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  if (!xs.length) return true;
+  return !!(await modal({title: "⚠️ ¿Pago repetido?", ok: "Cargar igual", cancel: "No cargar", html:
+    `<p>Ya ${xs.length === 1 ? "hay un pago" : "hay " + xs.length + " pagos"} de <b>${esc(nombre || email)}</b> cerca de esa fecha:</p>
+     ${xs.slice(0, 5).map(x => `<div class="row between" style="padding:4px 0;border-top:1px solid var(--line)"><span>${fmtFecha(x.fecha)} · ${esc(capi(x.medio))}${ORIGEN_TXT[x.origen] ? `<br><span class="small muted">${ORIGEN_TXT[x.origen]}</span>` : ""}</span><b>${plata(Number(x.monto) || 0)}</b></div>`).join("")}
+     <p class="small muted" style="margin-top:8px">Vas a cargar ${plata(monto)} el ${fmtFecha(fecha)}. Si es el mismo pago, tocá "No cargar".</p>`}));
 }
 // Pagos de una alumna que figuran en Finanzas (por mail, o por nombre en lo que vino del Excel)
 function pagosDeAlumnoHTML(al) {
