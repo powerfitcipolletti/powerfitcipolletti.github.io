@@ -309,7 +309,8 @@ function cicloDe(a, f) {
   // Cantidad de ciclos del período pago: la suscripción de 2 o 3 meses tiene 2 o 3; el pago mensual ("Otro") es un solo ciclo
   // hasta el vencimiento, aunque se lo hayan extendido (así un pack estirado no regala un cupo nuevo a mitad de camino)
   const mesesPago = PAGOS.find(x => x.id === a.pago)?.meses || 1;
-  const ciclos = a.vence && a.vence >= a.inicio ? mesesPago : 0;
+  // Excepción por alumna (plan estirado a propósito): un cupo cada 30 días hasta el vencimiento
+  const ciclos = a.vence && a.vence >= a.inicio ? (a.cuposHastaVence ? Math.max(mesesPago, Math.ceil((diasEntre(a.inicio, a.vence) + 1) / 30)) : mesesPago) : 0;
   if (ciclos && a.vence >= f) n = Math.min(n, ciclos - 1);
   const desde = addDays(a.inicio, n * 30);
   const hasta = ciclos && n === ciclos - 1 && a.vence >= f ? a.vence : addDays(desde, 29);
@@ -1895,6 +1896,7 @@ function formAlumno(a = {}) {
     <p class="small muted" style="margin-top:-6px">Los beneficios no se acumulan: se marca uno solo.</p>
     <label class="chk"><input type="checkbox" name="activo" ${a.activo !== false ? "checked" : ""}> Activo (puede reservar)</label>
     <label class="chk"><input type="checkbox" name="sinRestricciones" ${a.sinRestricciones ? "checked" : ""}> Sin restricciones de horario (reserva, cambia o cancela en cualquier momento, sin límite por semana ni días seguidos)</label>
+    <label class="chk"><input type="checkbox" name="cuposHastaVence" ${a.cuposHastaVence ? "checked" : ""}> Plan estirado (excepción): turnos del plan cada 30 días hasta el vencimiento</label>
     <div class="pago-al">
       <b>💵 Registrar un pago</b> <span class="small muted">(opcional · se suma solo en Finanzas)</span>
       <div class="grid2"><div><label>Monto ($)</label><input name="pagoMonto" type="number" inputmode="decimal" min="0" placeholder="Ej: 180000"></div>
@@ -1939,7 +1941,7 @@ async function editarAlumno(email, prefill) {
   const nuevo = {
     nombre: g("nombre").value.trim(), email: g("email").value.trim().toLowerCase(), telefono: g("telefono").value.trim(),
     plan: g("plan").value, pago: g("pago").value, inicio: g("inicio").value, vence: g("vence").value,
-    socioClub: g("socioClub").checked, pacienteDra: g("pacienteDra").checked, activo: g("activo").checked, sinRestricciones: g("sinRestricciones").checked, notas: g("notas").value.trim()
+    socioClub: g("socioClub").checked, pacienteDra: g("pacienteDra").checked, activo: g("activo").checked, sinRestricciones: g("sinRestricciones").checked, cuposHastaVence: g("cuposHastaVence").checked, notas: g("notas").value.trim()
   };
   if (!nuevo.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(nuevo.email)) return toast("Falta un mail válido");
   if (!a && alumnoDe(nuevo.email)) return toast("Ya existe un alumno con ese mail");
