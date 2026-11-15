@@ -1467,7 +1467,7 @@ const FIN_DESDE = "2026-11-15";
 const MESES_F = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const MEDIOS_ING = ["Transferencia", "Efectivo", "Suscripción MP", "Mercado Pago", "Otro"];
 const MEDIOS_GAS = ["Débito", "Efectivo", "Transferencia", "Crédito", "Mercado Pago", "Otro"];
-const CATS_GAS = ["Alquiler", "Empleada", "Servicios", "Agua", "Internet", "Celular", "Limpieza", "Seguro", "Monotributo", "Impuestos", "Marketing", "Mantenimiento", "Insumos", "Equipamiento", "Varios"];
+const CATS_GAS = ["Alquiler", "Empleada", "Servicios", "Agua", "Internet", "Celular", "Limpieza", "Seguro", "Monotributo", "Impuestos", "Comisiones", "Marketing", "Mantenimiento", "Insumos", "Equipamiento", "Varios"];
 const ORIGEN_TXT = {alumno: "Cargado desde la ficha de la alumna", efectivo: "Cargado desde la agenda (efectivo)", app: "Comprobante aprobado en la app", mp: "Débito de Mercado Pago", excel: "Importado del Excel"};
 const finCache = {}; // año -> movimientos
 const finMesAct = () => state.finMes || hoy().slice(0, 7);
@@ -1479,17 +1479,33 @@ async function cargarFin(y, forzar) {
   if (!finCache[y] || forzar) finCache[y] = await state.B.listFin(y);
   return finCache[y];
 }
-// Débitos de Mercado Pago nuevos -> ingresos (una sola vez cada uno)
+// Débitos de Mercado Pago nuevos -> ingresos (una sola vez cada uno).
+// El ingreso va por el monto total, con el neto a facturar al lado; la comisión de MP (% de Ajustes) va aparte como gasto.
 async function sincronizarMp() {
   const pagos = (await state.B.pagosDesde(FIN_DESDE)).filter(p => p.fecha && p.monto > 0 && (!p.estado || p.estado === "approved"));
+  const pct = Number(state.cfg?.mpComision) || 0;
   for (const p of pagos) {
-    const y = p.fecha.slice(0, 4), id = "mp_" + p.id;
+    const y = p.fecha.slice(0, 4), id = "mp_" + p.id, cid = "mpc_" + p.id, monto = Number(p.monto);
+    const com = pct > 0 ? Math.round(monto * pct / 100) : 0;
     await cargarFin(y);
-    if (finCache[y].some(x => x.id === id)) continue;
-    const a = state.alumnos.find(x => x.email === p.email) || state.alumnos.find(x => p.suscripcion && x.mpSuscripcion === p.suscripcion);
-    const d = {tipo: "ingreso", fecha: p.fecha, nombre: a?.nombre || p.email || "Mercado Pago", alumnoEmail: a?.email || p.email || "", dni: "", medio: "Suscripción MP", monto: Number(p.monto),
-      notas: "Débito automático de Mercado Pago", origen: "mp"};
-    try { await state.B.setFin(id, d); finCache[y].push({...d, id}); } catch (e) { console.warn("finanzas mp", e); }
+    let ing = finCache[y].find(x => x.id === id);
+    try {
+      if (!ing) {
+        const a = state.alumnos.find(x => x.email === p.email) || state.alumnos.find(x => p.suscripcion && x.mpSuscripcion === p.suscripcion);
+        const d = {tipo: "ingreso", fecha: p.fecha, nombre: a?.nombre || p.email || "Mercado Pago", alumnoEmail: a?.email || p.email || "", dni: "", medio: "Suscripción MP", monto,
+          neto: com ? monto - com : undefined, notas: "Débito automático de Mercado Pago", origen: "mp"};
+        await state.B.setFin(id, d); ing = {...d, id}; finCache[y].push(ing);
+      } else if (com && ing.neto == null && !ing.ignorado) {
+        const {id: _i, ...resto} = ing; const d = {...resto, neto: Number(ing.monto) - Math.round(Number(ing.monto) * pct / 100)};
+        await state.B.setFin(id, d); Object.assign(ing, d);
+      }
+      if (com && !ing.ignorado && !finCache[y].some(x => x.id === cid)) {
+        const base = Number(ing.monto) || monto, c = Math.round(base * pct / 100);
+        const g = {tipo: "gasto", fecha: p.fecha, nombre: "Mercado Pago", categoria: "Comisiones", medio: "Mercado Pago", monto: c,
+          notas: `Comisión ${pct}% sobre ${plata(base)} · ${ing.nombre || ""}`.trim(), origen: "mp"};
+        await state.B.setFin(cid, g); finCache[y].push({...g, id: cid});
+      }
+    } catch (e) { console.warn("finanzas mp", e); }
   }
 }
 async function abrirFinanzas(forzar) {
@@ -1579,12 +1595,13 @@ function finLista(tipo, mes) {
   const rows = finVivos(y).filter(x => x.tipo === tipo && (x.fecha || "").startsWith(mes))
     .sort((a, b) => b.fecha.localeCompare(a.fecha) || String(b.id).localeCompare(String(a.id)));
   const total = rows.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+  const conNeto = ing && rows.some(x => x.neto != null), neto = rows.reduce((t, x) => t + (x.neto != null ? Number(x.neto) : (Number(x.monto) || 0)), 0);
   const porMedio = {}; rows.forEach(x => { const k = capi(x.medio) || "Sin medio"; porMedio[k] = (porMedio[k] || 0) + (Number(x.monto) || 0); });
   const auto = x => ["mp", "efectivo", "app", "alumno"].includes(x.origen) ? `<span class="fin-tag">${{mp: "MP · automático", efectivo: "Agenda · automático", app: "Comprobante · automático", alumno: "Desde Alumnos"}[x.origen]}</span>` : "";
   return `${nav}
     <div class="fin-kpis">
       <div class="card"><div class="fin-kt">${ing ? "Ingresos" : "Gastos"} del mes</div><div class="fin-kn">${plata(total)}</div>
-        <div class="sub">${rows.length} ${ing ? (rows.length === 1 ? "cobro" : "cobros") : (rows.length === 1 ? "pago" : "pagos")}</div></div>
+        <div class="sub">${rows.length} ${ing ? (rows.length === 1 ? "cobro" : "cobros") : (rows.length === 1 ? "pago" : "pagos")}</div>${conNeto ? `<div class="sub">Neto a facturar (sin comisión MP): <b>${plata(neto)}</b></div>` : ""}</div>
       <div class="card"><div class="fin-kt">Por medio de pago</div><div class="fin-med">${Object.entries(porMedio).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><b>${plata(v)}</b>`).join("") || `<span class="sub">—</span>`}</div></div>
     </div>
     <button class="btn fin-add" data-a="finNuevo" data-t="${tipo}">+ Agregar ${ing ? "ingreso" : "gasto"}</button>
@@ -1594,7 +1611,7 @@ function finLista(tipo, mes) {
         <td><div class="fn">${esc(x.nombre || "—")}</div>
           <div class="sub">${[!ing && x.categoria ? capi(x.categoria) : "", `<span class="cm-m">${esc(capi(x.medio))}</span>`].filter(Boolean).join(" · ")}</div>
           ${x.notas ? `<div class="sub fnt">${esc(x.notas)}</div>` : ""}${auto(x)}</td>
-        <td class="cm">${esc(capi(x.medio))}</td><td class="r fm">${plata(Number(x.monto) || 0)}</td></tr>`).join("")}
+        <td class="cm">${esc(capi(x.medio))}</td><td class="r fm">${plata(Number(x.monto) || 0)}${ing && x.neto != null ? `<div class="sub">Neto ${plata(Number(x.neto))}</div>` : ""}</td></tr>`).join("")}
       </tbody></table></div>` : `<div class="card sub center">No hay ${ing ? "ingresos" : "gastos"} cargados en ${MESES_F[mm - 1].toLowerCase()}.</div>`}`;
 }
 
@@ -2150,6 +2167,7 @@ function vAjustes() {
       <div><label>Un turno cada (min)</label><input type="number" min="5" step="5" id="cInt" value="${c.intervalo}"></div>
       <div><label>Duración clase (min)</label><input type="number" min="5" step="5" id="cDur" value="${c.duracion}"></div>
       <div><label>Cancelar/cambiar hasta (min antes)</label><input type="number" min="0" step="15" id="cCan" value="${c.cancelMin}"></div>
+      <div><label>Comisión Mercado Pago (%)</label><input type="number" min="0" step="0.01" id="cMpCom" value="${c.mpComision || ""}" placeholder="Ej: 6.29"></div>
       <div><label>Reservar con hasta (días)</label><input type="number" min="1" id="cDias" value="${c.diasAnticipacion}"></div>
       <div><label>Máximo de turnos por semana</label><input type="number" min="1" id="cMaxSem" value="${c.maxSemana ?? 3}"></div>
       <div><label>Máximo de días seguidos</label><input type="number" min="1" id="cMaxSeg" value="${c.maxSeguidos ?? 2}"></div>
@@ -2186,7 +2204,7 @@ async function saveCfg() {
     capacidad: Math.max(1, Number(g("cCap").value) || 1), intervalo: Math.max(5, Number(g("cInt").value) || 30),
     duracion: Math.max(5, Number(g("cDur").value) || 20), cancelMin: Math.max(0, Math.round(Number(g("cCan").value) || 0)),
     diasAnticipacion: Math.max(1, Number(g("cDias").value) || 30), maxSemana: Math.max(1, Number(g("cMaxSem").value) || 3), maxSeguidos: Math.max(1, Number(g("cMaxSeg").value) || 2), horarios: {},
-    feriadosEx: state.cfg.feriadosEx || {}, horariosDesde: g("cDesde").value || "", horariosNuevos: {}
+    mpComision: Math.max(0, Number(g("cMpCom").value) || 0), feriadosEx: state.cfg.feriadosEx || {}, horariosDesde: g("cDesde").value || "", horariosNuevos: {}
   };
   for (let d = 0; d < 7; d++) { c.horarios[String(d)] = g("cH" + d).value.trim(); c.horariosNuevos[String(d)] = g("cN" + d).value.trim(); }
   const malos = [...Object.values(c.horarios), ...Object.values(c.horariosNuevos)].filter(v => v && !v.split(",").every(r => /^\s*\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\s*$/.test(r)));
