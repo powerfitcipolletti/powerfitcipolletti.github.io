@@ -1624,6 +1624,15 @@ function finResumen(anio) {
       ${cl.length ? cl.map(c => `<div class="fin-bar"><div class="fin-bl"><span>${esc(c.n)}</span><b>${plata(c.v)} <small>${Math.round(c.v / totC * 100)}%</small></b></div><div class="fin-bt"><i style="width:${Math.max(2, Math.round(c.v / maxC * 100))}%"></i></div></div>`).join("") : `<div class="sub" style="margin-top:8px">Sin gastos cargados</div>`}</div>`;
 }
 
+// Fecha escrita a mano: 15/11/2026, 15-11-2026, 15.11.26 o 15/11 (año actual) -> "2026-11-15"; "" si no es válida
+function fechaEscrita(t) {
+  const m = String(t || "").trim().match(/^(\d{1,2})[\/\-. ](\d{1,2})(?:[\/\-. ](\d{2}|\d{4}))?$/);
+  if (!m) return /^\d{4}-\d{2}-\d{2}$/.test(String(t).trim()) ? String(t).trim() : "";
+  const dd = Number(m[1]), mm = Number(m[2]), yy = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : Number(hoy().slice(0, 4));
+  const f = new Date(Date.UTC(yy, mm - 1, dd));
+  if (yy < 2000 || yy > 2100 || f.getUTCMonth() !== mm - 1 || f.getUTCDate() !== dd) return "";
+  return f.toISOString().slice(0, 10);
+}
 async function finEditar(id, tipo, y) {
   const x = id ? (finCache[y] || []).find(r => r.id === id) : null;
   tipo = x ? x.tipo : tipo;
@@ -1632,7 +1641,7 @@ async function finEditar(id, tipo, y) {
   const fechaIni = x?.fecha || (finMesAct() === hoy().slice(0, 7) ? hoy() : finMesAct() + "-01");
   const box = await modal({title: (x ? "Editar " : "Nuevo ") + (ing ? "ingreso" : "gasto"), ok: "Guardar", html: `
     ${x?.origen && ORIGEN_TXT[x.origen] ? `<div class="note acc small">${ORIGEN_TXT[x.origen]}</div>` : ""}
-    <div class="grid2"><div><label>Fecha</label><input type="date" name="fecha" value="${esc(fechaIni)}"></div>
+    <div class="grid2"><div><label>Fecha (dd/mm/aaaa)</label><input name="fecha" inputmode="numeric" placeholder="15/11/2026" autocomplete="off" value="${esc(fechaIni.split("-").reverse().join("/"))}"></div>
     <div><label>Monto ($)</label><input name="monto" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(x?.monto ?? "")}"></div></div>
     <label>${ing ? "Cliente" : "Proveedor"}</label><input name="nombre" list="dlNom" value="${esc(x?.nombre || "")}" autocomplete="off">
     ${lista("dlNom", ing ? state.alumnos.filter(a => a.activo).map(a => a.nombre) : all.filter(r => r.tipo === "gasto").map(r => r.nombre))}
@@ -1652,9 +1661,9 @@ async function finEditar(id, tipo, y) {
     return;
   }
   const v = n => (box.querySelector(`[name=${n}]`)?.value || "").trim();
-  const d = {tipo, fecha: v("fecha"), nombre: v("nombre"), medio: v("medio"), monto: Number(v("monto")), notas: v("notas")};
+  const d = {tipo, fecha: fechaEscrita(v("fecha")), nombre: v("nombre"), medio: v("medio"), monto: Number(v("monto")), notas: v("notas")};
   if (ing) d.dni = v("dni"); else d.categoria = v("categoria");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha)) return toast("Elegí la fecha");
+  if (!d.fecha) return toast("Revisá la fecha: escribila como 15/11/2026");
   if (!(d.monto > 0)) return toast("Poné el monto");
   if (!d.nombre) return toast(ing ? "Poné el nombre del cliente" : "Poné el proveedor");
   if (x) { d.origen = x.origen || ""; ["concepto", "categoriaIng", "plan"].forEach(k => { if (x[k] != null) d[k] = x[k]; }); }
