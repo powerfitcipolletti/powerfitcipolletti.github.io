@@ -106,6 +106,7 @@
   .fin-buscar input{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
   .fin-buscar input:focus{outline:2px solid var(--accent2);outline-offset:1px}
   .fin-tipo{font-weight:700} .fin-tipo.gasto{color:var(--bad)} .fin-tipo.ingreso{color:var(--ok)}
+  .pago-al{margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:12px;background:var(--card2)}
   .fin-cat{padding:16px}
   .fin-mini{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--muted);margin:4px 0 12px}
   .fin-mini b{color:var(--text)}
@@ -1125,7 +1126,7 @@ async function aprobarComprobante(id) {
   if (await run(async () => {
     await state.B.saveAlumno({...a, inicio, vence, activo: true});
     await state.B.resolverComprobante(id, {estado: "aprobado", inicio, vence, revisado: h});
-    if (c.monto > 0) await finAuto("comp_" + id, {tipo: "ingreso", fecha: h, nombre: a.nombre || a.email, dni: "", medio: "Transferencia", monto: Number(c.monto),
+    if (c.monto > 0) await finAuto("comp_" + id, {tipo: "ingreso", fecha: h, nombre: a.nombre || a.email, alumnoEmail: a.email, dni: "", medio: "Transferencia", monto: Number(c.monto),
       notas: "Comprobante aprobado" + (c.nota ? " · " + c.nota : ""), origen: "app"});
     // mail automático: lo manda el programa de avisos desde el Gmail del gimnasio (igual que los mails masivos)
     if (avisar) await state.B.crearDifusion({asunto: "Tu pago fue aprobado ✅", boton: true, para: "pago", fecha: h, ts: Date.now(),
@@ -1418,7 +1419,7 @@ async function registrarPago(id) {
   }
   if (await run(() => state.B.setPago(r, v), quitar ? "Pago quitado" : "Pago registrado")) {
     // también queda como ingreso en Finanzas
-    await finAuto("ef_" + r.id, v ? {tipo: "ingreso", fecha: r.fecha, nombre: nombreRes(r), dni: "", medio: "Efectivo", monto: v.monto,
+    await finAuto("ef_" + r.id, v ? {tipo: "ingreso", fecha: r.fecha, nombre: nombreRes(r), alumnoEmail: String(r.email || r.mail || "").toLowerCase(), dni: "", medio: "Efectivo", monto: v.monto,
       notas: [v.concepto, v.nota].filter(Boolean).join(" · "), origen: "efectivo", por: state.user.email} : null);
     await cargarAdmin(); renderAdmin();
   }
@@ -1461,7 +1462,7 @@ const MESES_F = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
 const MEDIOS_ING = ["Transferencia", "Efectivo", "Suscripción MP", "Mercado Pago", "Otro"];
 const MEDIOS_GAS = ["Débito", "Efectivo", "Transferencia", "Crédito", "Mercado Pago", "Otro"];
 const CATS_GAS = ["Alquiler", "Empleada", "Servicios", "Agua", "Internet", "Celular", "Limpieza", "Seguro", "Monotributo", "Impuestos", "Marketing", "Mantenimiento", "Insumos", "Equipamiento", "Varios"];
-const ORIGEN_TXT = {efectivo: "Cargado desde la agenda (efectivo)", app: "Comprobante aprobado en la app", mp: "Débito de Mercado Pago", excel: "Importado del Excel"};
+const ORIGEN_TXT = {alumno: "Cargado desde la ficha de la alumna", efectivo: "Cargado desde la agenda (efectivo)", app: "Comprobante aprobado en la app", mp: "Débito de Mercado Pago", excel: "Importado del Excel"};
 const finCache = {}; // año -> movimientos
 const finMesAct = () => state.finMes || hoy().slice(0, 7);
 const finAnioAct = () => state.finAnio || hoy().slice(0, 4);
@@ -1480,7 +1481,7 @@ async function sincronizarMp() {
     await cargarFin(y);
     if (finCache[y].some(x => x.id === id)) continue;
     const a = state.alumnos.find(x => x.email === p.email) || state.alumnos.find(x => p.suscripcion && x.mpSuscripcion === p.suscripcion);
-    const d = {tipo: "ingreso", fecha: p.fecha, nombre: a?.nombre || p.email || "Mercado Pago", dni: "", medio: "Suscripción MP", monto: Number(p.monto),
+    const d = {tipo: "ingreso", fecha: p.fecha, nombre: a?.nombre || p.email || "Mercado Pago", alumnoEmail: a?.email || p.email || "", dni: "", medio: "Suscripción MP", monto: Number(p.monto),
       notas: "Débito automático de Mercado Pago", origen: "mp"};
     try { await state.B.setFin(id, d); finCache[y].push({...d, id}); } catch (e) { console.warn("finanzas mp", e); }
   }
@@ -1573,7 +1574,7 @@ function finLista(tipo, mes) {
     .sort((a, b) => b.fecha.localeCompare(a.fecha) || String(b.id).localeCompare(String(a.id)));
   const total = rows.reduce((t, x) => t + (Number(x.monto) || 0), 0);
   const porMedio = {}; rows.forEach(x => { const k = capi(x.medio) || "Sin medio"; porMedio[k] = (porMedio[k] || 0) + (Number(x.monto) || 0); });
-  const auto = x => ["mp", "efectivo", "app"].includes(x.origen) ? `<span class="fin-tag">${x.origen === "mp" ? "MP · automático" : x.origen === "efectivo" ? "Agenda · automático" : "Comprobante · automático"}</span>` : "";
+  const auto = x => ["mp", "efectivo", "app", "alumno"].includes(x.origen) ? `<span class="fin-tag">${{mp: "MP · automático", efectivo: "Agenda · automático", app: "Comprobante · automático", alumno: "Desde Alumnos"}[x.origen]}</span>` : "";
   return `${nav}
     <div class="fin-kpis">
       <div class="card"><div class="fin-kt">${ing ? "Ingresos" : "Gastos"} del mes</div><div class="fin-kn">${plata(total)}</div>
@@ -1666,7 +1667,7 @@ async function finEditar(id, tipo, y) {
   if (!d.fecha) return toast("Revisá la fecha: escribila como 15/11/2026");
   if (!(d.monto > 0)) return toast("Poné el monto");
   if (!d.nombre) return toast(ing ? "Poné el nombre del cliente" : "Poné el proveedor");
-  if (x) { d.origen = x.origen || ""; ["concepto", "categoriaIng", "plan"].forEach(k => { if (x[k] != null) d[k] = x[k]; }); }
+  if (x) { d.origen = x.origen || ""; ["concepto", "categoriaIng", "plan", "alumnoEmail"].forEach(k => { if (x[k] != null) d[k] = x[k]; }); }
   else d.origen = "manual";
   d.por = state.user.email; d.editado = Date.now();
   const nid = x ? x.id : (tipo === "gasto" ? "g_" : "i_") + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -1888,6 +1889,14 @@ function formAlumno(a = {}) {
     <p class="small muted" style="margin-top:-6px">Los beneficios no se acumulan: se marca uno solo.</p>
     <label class="chk"><input type="checkbox" name="activo" ${a.activo !== false ? "checked" : ""}> Activo (puede reservar)</label>
     <label class="chk"><input type="checkbox" name="sinRestricciones" ${a.sinRestricciones ? "checked" : ""}> Sin restricciones de horario (reserva, cambia o cancela en cualquier momento, sin límite por semana ni días seguidos)</label>
+    <div class="pago-al">
+      <b>💵 Registrar un pago</b> <span class="small muted">(opcional · se suma solo en Finanzas)</span>
+      <div class="grid2"><div><label>Monto ($)</label><input name="pagoMonto" type="number" inputmode="decimal" min="0" placeholder="Ej: 180000"></div>
+        <div><label>Fecha (dd/mm/aaaa)</label><input name="pagoFecha" inputmode="numeric" value="${hoy().split("-").reverse().join("/")}"></div></div>
+      <label>Medio</label><input name="pagoMedio" list="dlMedAl" value="Transferencia" autocomplete="off"><datalist id="dlMedAl">${MEDIOS_ING.concat(["Prex"]).map(m => `<option value="${m}">`).join("")}</datalist>
+      <p class="small" id="pagoSug" style="margin:6px 0 0"></p>
+      <div id="pagosAl" class="small" style="margin-top:8px">${a.email || a.nombre ? `<span class="muted">Buscando pagos anteriores…</span>` : ""}</div>
+    </div>
     <label>Notas / contraindicaciones</label><textarea name="notas">${esc(a.notas)}</textarea>
     <div id="fichaMed">${a.email ? `<p class="small muted" style="margin-top:12px">Buscando ficha médica…</p>` : ""}</div>
     ${!nuevo ? `<button class="btn bad sm" style="margin-top:12px" data-del="1">Eliminar alumno</button>` : ""}`;
@@ -1905,6 +1914,13 @@ async function editarAlumno(email, prefill) {
       club.onchange = () => { if (club.checked) dra.checked = false; };
       dra.onchange = () => { if (dra.checked) club.checked = false; };
       if (!ven.value) calc(); else total();
+      // Sugerir el monto del período y mostrar los pagos que ya figuran en Finanzas
+      const sug = b.querySelector("#pagoSug"), pm = b.querySelector("[name=pagoMonto]");
+      const pintaSug = () => { const t = totalPeriodo(plan.value, pago.value); sug.innerHTML = t ? `<a href="#" data-sug="${t}" style="color:var(--accent2)">Usar ${plata(t)} (total del período)</a>` : ""; };
+      sug.onclick = ev => { const t = ev.target.closest("[data-sug]"); if (t) { ev.preventDefault(); pm.value = t.dataset.sug; } };
+      pintaSug(); plan.addEventListener("change", pintaSug); pago.addEventListener("change", pintaSug);
+      const quien = a || prefill || {}, pa = b.querySelector("#pagosAl");
+      if (pa && (quien.email || quien.nombre)) cargarFinTodo().then(() => { pa.innerHTML = pagosDeAlumnoHTML(quien); }).catch(() => { pa.innerHTML = ""; });
       const fm = b.querySelector("#fichaMed"), mailF = (a || prefill || {}).email;
       if (fm && mailF) fichaDe(mailF).then(f => { fm.innerHTML = fichaHTML(f, mailF); });
       const del = b.querySelector("[data-del]");
@@ -1921,7 +1937,29 @@ async function editarAlumno(email, prefill) {
   };
   if (!nuevo.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(nuevo.email)) return toast("Falta un mail válido");
   if (!a && alumnoDe(nuevo.email)) return toast("Ya existe un alumno con ese mail");
-  if (await run(() => state.B.saveAlumno(nuevo), "Guardado")) { await cargarAdmin(); renderAdmin(); }
+  const pMonto = Number(g("pagoMonto").value), pFecha = fechaEscrita(g("pagoFecha").value), pMedio = g("pagoMedio").value.trim() || "Transferencia";
+  if (pMonto > 0 && !pFecha) return toast("Revisá la fecha del pago: escribila como 15/11/2026");
+  if (await run(() => state.B.saveAlumno(nuevo), "Guardado")) {
+    if (pMonto > 0) {
+      const plan = PLANES.find(x => x.id === nuevo.plan), forma = PAGOS.find(x => x.id === nuevo.pago);
+      await finAuto("al_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), {tipo: "ingreso", fecha: pFecha, nombre: nuevo.nombre || nuevo.email,
+        alumnoEmail: nuevo.email, dni: "", medio: pMedio, monto: pMonto, origen: "alumno", por: state.user.email,
+        notas: [plan?.nombre, forma?.nombre, nuevo.vence ? "vence " + fmtFecha(nuevo.vence) : ""].filter(Boolean).join(" · ")});
+      toast("Pago de " + plata(pMonto) + " sumado en Finanzas");
+    }
+    await cargarAdmin(); renderAdmin();
+  }
+}
+// Pagos de una alumna que figuran en Finanzas (por mail, o por nombre en lo que vino del Excel)
+function pagosDeAlumnoHTML(al) {
+  const nom = sinTildes(al.nombre || "").trim(), mail = String(al.email || "").toLowerCase();
+  const xs = Object.values(finCache).flat().filter(x => x.tipo === "ingreso" && !x.ignorado
+    && ((mail && x.alumnoEmail === mail) || (nom.length > 3 && sinTildes(x.nombre || "").includes(nom))))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  if (!xs.length) return `<span class="muted">Todavía no tiene pagos registrados en Finanzas.</span>`;
+  return `<div class="muted" style="margin-bottom:4px">Pagos registrados en Finanzas:</div>` + xs.slice(0, 8).map(x =>
+    `<div class="row between" style="padding:3px 0;border-top:1px solid var(--line)"><span>${fmtFecha(x.fecha)} · ${esc(capi(x.medio))}</span><b>${plata(Number(x.monto) || 0)}</b></div>`).join("")
+    + (xs.length > 8 ? `<div class="muted">y ${xs.length - 8} más (buscalos en Finanzas)</div>` : "");
 }
 async function agAgregar(h, fecha) {
   const f = fecha || state.agFecha;
