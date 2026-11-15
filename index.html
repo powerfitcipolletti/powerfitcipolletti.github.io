@@ -530,7 +530,10 @@ async function firebaseBackend() {
     demo: false,
     init(cb) {
       A.getRedirectResult(auth).catch(e => console.warn(e));
-      A.onAuthStateChanged(auth, u => { me = u && !u.isAnonymous ? {email: (u.email || "").toLowerCase(), nombre: u.displayName || "", foto: u.photoURL, verificado: u.emailVerified} : null; cb(me); });
+      A.onAuthStateChanged(auth, async u => {
+        // Si confirmó el mail después de entrar, el pase guardado en el celu sigue diciendo "sin confirmar" y la base la rechaza: se pide uno nuevo
+        if (u && !u.isAnonymous && u.emailVerified) { try { const t = await u.getIdTokenResult(); if (!t.claims.email_verified) await u.getIdToken(true); } catch (e) { console.warn(e); } }
+        me = u && !u.isAnonymous ? {email: (u.email || "").toLowerCase(), nombre: u.displayName || "", foto: u.photoURL, verificado: u.emailVerified} : null; cb(me); });
     },
     async login() {
       const p = new A.GoogleAuthProvider(); p.setCustomParameters({prompt: "select_account"});
