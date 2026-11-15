@@ -1486,23 +1486,24 @@ async function sincronizarMp() {
   const pct = Number(state.cfg?.mpComision) || 0;
   for (const p of pagos) {
     const y = p.fecha.slice(0, 4), id = "mp_" + p.id, cid = "mpc_" + p.id, monto = Number(p.monto);
-    const com = pct > 0 ? Math.round(monto * pct / 100) : 0;
+    // Comisión exacta que guarda el programa de Mercado Pago; si no está, se usa el % de Ajustes
+    const com = p.comision != null ? Number(p.comision) : (pct > 0 ? Math.round(monto * pct / 100) : 0);
     await cargarFin(y);
     let ing = finCache[y].find(x => x.id === id);
     try {
       if (!ing) {
         const a = state.alumnos.find(x => x.email === p.email) || state.alumnos.find(x => p.suscripcion && x.mpSuscripcion === p.suscripcion);
         const d = {tipo: "ingreso", fecha: p.fecha, nombre: a?.nombre || p.email || "Mercado Pago", alumnoEmail: a?.email || p.email || "", dni: "", medio: "Suscripción MP", monto,
-          neto: com ? monto - com : undefined, notas: "Débito automático de Mercado Pago", origen: "mp"};
+          neto: com ? (p.neto != null ? Number(p.neto) : Math.round((monto - com) * 100) / 100) : undefined, notas: "Débito automático de Mercado Pago", origen: "mp"};
         await state.B.setFin(id, d); ing = {...d, id}; finCache[y].push(ing);
       } else if (com && ing.neto == null && !ing.ignorado) {
-        const {id: _i, ...resto} = ing; const d = {...resto, neto: Number(ing.monto) - Math.round(Number(ing.monto) * pct / 100)};
+        const {id: _i, ...resto} = ing; const d = {...resto, neto: p.neto != null && Number(ing.monto) === monto ? Number(p.neto) : Math.round((Number(ing.monto) - com) * 100) / 100};
         await state.B.setFin(id, d); Object.assign(ing, d);
       }
       if (com && !ing.ignorado && !finCache[y].some(x => x.id === cid)) {
-        const base = Number(ing.monto) || monto, c = Math.round(base * pct / 100);
+        const base = Number(ing.monto) || monto, c = com;
         const g = {tipo: "gasto", fecha: p.fecha, nombre: "Mercado Pago", categoria: "Comisiones", medio: "Mercado Pago", monto: c,
-          notas: `Comisión ${pct}% sobre ${plata(base)} · ${ing.nombre || ""}`.trim(), origen: "mp"};
+          notas: `Comisión de Mercado Pago sobre ${plata(base)} · ${ing.nombre || ""}`.trim(), origen: "mp"};
         await state.B.setFin(cid, g); finCache[y].push({...g, id: cid});
       }
     } catch (e) { console.warn("finanzas mp", e); }
