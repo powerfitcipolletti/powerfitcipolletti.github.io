@@ -298,19 +298,20 @@ const planNombre = id => (PLANES.find(p => p.id === id) || {nombre: id || "Sin p
 const pagoNombre = id => (PAGOS.find(p => p.id === id) || {nombre: id || "—"}).nombre;
 const vecesSemana = a => (PLANES.find(p => p.id === a?.plan) || {}).veces || 0;
 // Turnos que incluye el plan cada 30 días (cupoMes en PLANES)
-const cupoMes = a => (PLANES.find(p => p.id === a?.plan) || {}).cupoMes || 0;
+// Plan estirado (excepción): el total de turnos del período pago, para usar en cualquier momento hasta el vencimiento
+const cupoMes = a => { const c = (PLANES.find(p => p.id === a?.plan) || {}).cupoMes || 0; return a?.cuposHastaVence ? c * (PAGOS.find(x => x.id === a.pago)?.meses || 1) : c; };
 const fmtDM = f => `${Number(f.slice(8))}/${Number(f.slice(5,7))}`;
 // Ciclo de 30 días que contiene la fecha f, contando desde el día en que pagó (inicio).
 // Si paga 2 o 3 meses, tiene 2 o 3 ciclos seguidos de 30 días, cada uno con su cupo.
 function cicloDe(a, f) {
   if (!a?.inicio) { const ym = f.slice(0, 7); return {desde: ym + "-01", hasta: ym + "-31"}; }
+  if (a.cuposHastaVence && a.vence && a.vence >= a.inicio) return {desde: a.inicio, hasta: a.vence};
   let n = Math.max(0, Math.floor(diasEntre(a.inicio, f) / 30));
   // El último ciclo del período pago llega hasta el vencimiento (así no aparece un ciclo extra por 1 o 2 días sueltos)
   // Cantidad de ciclos del período pago: la suscripción de 2 o 3 meses tiene 2 o 3; el pago mensual ("Otro") es un solo ciclo
   // hasta el vencimiento, aunque se lo hayan extendido (así un pack estirado no regala un cupo nuevo a mitad de camino)
   const mesesPago = PAGOS.find(x => x.id === a.pago)?.meses || 1;
-  // Excepción por alumna (plan estirado a propósito): un cupo cada 30 días hasta el vencimiento
-  const ciclos = a.vence && a.vence >= a.inicio ? (a.cuposHastaVence ? Math.max(mesesPago, Math.ceil((diasEntre(a.inicio, a.vence) + 1) / 30)) : mesesPago) : 0;
+  const ciclos = a.vence && a.vence >= a.inicio ? mesesPago : 0;
   if (ciclos && a.vence >= f) n = Math.min(n, ciclos - 1);
   const desde = addDays(a.inicio, n * 30);
   const hasta = ciclos && n === ciclos - 1 && a.vence >= f ? a.vence : addDays(desde, 29);
@@ -958,7 +959,7 @@ function validarReserva(al, mis, f, h, excluirId) {
   const cupo = cupoMes(al);
   if (cupo > 0) {
     const c = cicloDe(al, f), usadasC = enCiclo(otras, c);
-    if (usadasC >= cupo && !(suelta && suelta.fecha >= c.desde && suelta.fecha <= c.hasta)) return `Tu plan incluye ${cupo} turnos cada 30 días y ya tenés ${usadasC} entre el ${fmtDM(c.desde)} y el ${fmtDM(c.hasta)}`;
+    if (usadasC >= cupo && !(suelta && suelta.fecha >= c.desde && suelta.fecha <= c.hasta)) return `Tu plan incluye ${cupo} turnos ${al?.cuposHastaVence ? "en total" : "cada 30 días"} y ya tenés ${usadasC} entre el ${fmtDM(c.desde)} y el ${fmtDM(c.hasta)}`;
   }
   return null;
 }
@@ -1914,7 +1915,7 @@ function formAlumno(a = {}) {
     <p class="small muted" style="margin-top:-6px">Los beneficios no se acumulan: se marca uno solo.</p>
     <label class="chk"><input type="checkbox" name="activo" ${a.activo !== false ? "checked" : ""}> Activo (puede reservar)</label>
     <label class="chk"><input type="checkbox" name="sinRestricciones" ${a.sinRestricciones ? "checked" : ""}> Sin restricciones de horario (reserva, cambia o cancela en cualquier momento, sin límite por semana ni días seguidos)</label>
-    <label class="chk"><input type="checkbox" name="cuposHastaVence" ${a.cuposHastaVence ? "checked" : ""}> Plan estirado (excepción): turnos del plan cada 30 días hasta el vencimiento</label>
+    <label class="chk"><input type="checkbox" name="cuposHastaVence" ${a.cuposHastaVence ? "checked" : ""}> Plan estirado (excepción): el total de turnos del plan se puede usar hasta el vencimiento</label>
     <div class="pago-al">
       <b>💵 Registrar un pago</b> <span class="small muted">(opcional · se suma solo en Finanzas)</span>
       <div class="grid2"><div><label>Monto ($)</label><input name="pagoMonto" type="number" inputmode="decimal" min="0" placeholder="Ej: 180000"></div>
