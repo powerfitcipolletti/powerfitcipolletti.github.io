@@ -614,6 +614,28 @@ async function firebaseBackend() {
       const q = query(collection(db, "turnos"), where("fecha", ">=", desde), where("fecha", "<=", hasta));
       return onSnapshot(q, s => { const m = {}; s.forEach(d => m[d.id] = d.data().n || 0); fn(m); }, e => console.error(e));
     },
+    // Datos "en vivo" del panel: se leen una sola vez por sesión y después Firebase manda solo lo que cambia
+    // (antes se releían las 268 alumnas y ~1000 reservas en cada acción y se agotaba la cuota gratis de lecturas)
+    _vivos: {},
+    vivo(clave, crearQuery, mapear) {
+      const V = this._vivos;
+      if (!V[clave]) {
+        const e0 = V[clave] = {};
+        e0.p = new Promise((ok, mal) => {
+          let primero = true;
+          e0.u = onSnapshot(crearQuery(), s => { e0.d = s.docs.map(mapear); if (primero) { primero = false; ok(); } },
+            e => { console.error(e); if (V[clave] === e0) delete V[clave]; if (primero) { primero = false; mal(e); } try { e0.u && e0.u(); } catch (x) {} });
+        });
+      }
+      const e1 = V[clave];
+      return e1.p.then(() => e1.d.slice());
+    },
+    listAlumnosVivo() { return this.vivo("alumnos", () => collection(db, "alumnos"), d => d.data()); },
+    reservasRangoVivo(d, h) {
+      const k = "res_" + d + "_" + h;
+      Object.keys(this._vivos).filter(x => x.startsWith("res_") && x !== k).forEach(x => { try { this._vivos[x].u && this._vivos[x].u(); } catch (e) {} delete this._vivos[x]; });
+      return this.vivo(k, () => query(collection(db, "reservas"), where("fecha", ">=", d), where("fecha", "<=", h)), x => plain(x.id, x.data()));
+    },
     async misReservas() {
       const s = await getDocs(query(collection(db, "reservas"), where("email", "==", me.email)));
       return s.docs.map(d => plain(d.id, d.data()));
@@ -976,9 +998,12 @@ function diasReservables(al) {
   const out = []; for (let i = 0; i <= n; i++) out.push(addDays(h, i)); return out;
 }
 function suscribirTurnos() {
+  const d = diasReservables(state.alumno), lun = state.semAl || lunesDe(hoy());
+  const desde = lun > d[0] ? lun : d[0], hasta0 = addDays(lun, 13), hasta = hasta0 < d[d.length - 1] ? hasta0 : d[d.length - 1];
+  if (state._turnosR === desde + hasta && state.unsub) return;
   state.unsub && state.unsub();
-  const d = diasReservables(state.alumno);
-  state.unsub = state.B.listenTurnos(d[0], d[d.length - 1], m => { state.turnos = m; if (RUTA === "alumnos") renderAlumno(); });
+  state._turnosR = desde + hasta;
+  state.unsub = state.B.listenTurnos(desde, hasta < desde ? desde : hasta, m => { state.turnos = m; if (RUTA === "alumnos") renderAlumno(); });
 }
 function renderAlumno() {
   const scPrev = document.querySelector(".semana"), scLeft = scPrev && state._semAlPrev === state.semAl ? scPrev.scrollLeft : 0;
@@ -1202,10 +1227,16 @@ async function clickSlot(f, h) {
 async function cargarAdmin() {
   const ym = state.agFecha.slice(0, 7);
   const lun = lunesDe(state.agFecha);
-  const [al, dia, mes, bl, pru, sem] = await Promise.all([
-    state.B.listAlumnos(), state.B.reservasRango(state.agFecha, state.agFecha),
-    state.B.reservasRango(ym + "-01", ym + "-31"), state.B.listBloqueos(),
-    state.B.reservasRango(addDays(hoy(), -45), addDays(hoy(), 60)), state.B.reservasRango(lun, addDays(lun, 6))
+  const B = state.B, rD = addDays(hoy(), -45), rH = addDays(hoy(), 60);
+  let al, dia, mes, bl, pru, sem;
+  if (B.reservasRangoVivo) {
+    [al, pru, bl] = await Promise.all([B.listAlumnosVivo(), B.reservasRangoVivo(rD, rH), B.listBloqueos()]);
+    const de = (d, h) => d >= rD && h <= rH ? Promise.resolve(pru.filter(r => r.fecha >= d && r.fecha <= h)) : B.reservasRango(d, h);
+    [dia, mes, sem] = await Promise.all([de(state.agFecha, state.agFecha), de(ym + "-01", ym + "-31"), de(lun, addDays(lun, 6))]);
+  } else [al, dia, mes, bl, pru, sem] = await Promise.all([
+    B.listAlumnos(), B.reservasRango(state.agFecha, state.agFecha),
+    B.reservasRango(ym + "-01", ym + "-31"), B.listBloqueos(),
+    B.reservasRango(rD, rH), B.reservasRango(lun, addDays(lun, 6))
   ]);
   state.resSem = sem;
   state.resRango = pru; // todas las reservas de -45 a +60 días (para contar cupos)
@@ -2331,7 +2362,7 @@ document.addEventListener("click", async e => {
     case "prOtra": pr.listo = null; try { localStorage.removeItem(PRUEBA_KEY); } catch (e) {} renderPrueba(); break;
     case "alta": { const r = resPorId(el.dataset.id); if (r) editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota}); break; }
     case "dia": state.diaSel = el.dataset.f; renderAlumno(); break;
-    case "semAl": state.semAl = addDays(state.semAl || lunesDe(hoy()), Number(el.dataset.d)); renderAlumno(); break;
+    case "semAl": state.semAl = addDays(state.semAl || lunesDe(hoy()), Number(el.dataset.d)); state.turnos = {}; suscribirTurnos(); renderAlumno(); break;
     case "slot": clickSlot(el.dataset.f, el.dataset.h); break;
     case "anunc": mostrarAnuncio(Number(el.dataset.i)); break;
     case "cambiar": state.cambiando = state.mis.find(r => r.id === el.dataset.id); state.diaSel = null; renderAlumno(); toast("Elegí el nuevo día y horario"); break;
