@@ -409,7 +409,7 @@ function demoBackend() {
       if (pedir && Notification.permission === "default") await Notification.requestPermission();
       return Notification.permission === "granted" ? "ok" : Notification.permission === "denied" ? "bloqueado" : "pendiente";
     },
-    async getFicha(email) { return email === "carla.demo@gmail.com" ? {fecha: "10/10/2026", nombre: "Carla Ruiz", dni: "30111222", edad: "42", nacimiento: "02/03/1984", telefono: "2995553333", altura: "165", peso: "68", actividad: "No", objetivo: "Tonificar y bajar de peso", condiciones: "Hipertensión", detalle: "Controlada con medicación", medicacion: "Sí", cualMedicacion: "Enalapril", lesion: "No", otra: "", imagen: "Sí", consentimiento: "si", firma: "Carla Ruiz"} : null; }
+    async getFicha(email) { return email === "carla.demo@gmail.com" ? {fecha: "10/10/2026", nombre: "Carla Ruiz", dni: "30111222", edad: "42", nacimiento: "02/03/1984", telefono: "2995553333", altura: "165", peso: "68", actividad: "No", objetivo: "Tonificar y bajar de peso", condiciones: "Hipertensión", detalle: "Controlada con medicación", medicacion: "Sí", cualMedicacion: "Enalapril", lesion: "No", otra: "", imagen: "Sí", consentimiento: "Sí", firma: "Carla Ruiz", hora: "18:42", firmaImg: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABkAQMAAAAGz5+DAAAABlBMVEX///8LGjovth/2AAACe0lEQVR42u2WsW7UQBCGv7VPZ1fxlVdEstNRUh5SkrsCUfMI4Q1SpkBikaKkocgr8CCgTaBIg5RHWEVIUC4oxQK+M4Xt3fU5FyxEQXFT2eN///1ndmbWsLWtbW1r/7El9/iiv2aL5b9kEwoQf2I7BGAsH4aJy6oYoK1xpIt7vIeB51peABR9WHbplYzUAmBn0odNOPaeEoBf96RgjvVHJfQMmJ302d5xtn6idtSDiZK3XlzFZ2Ch+mxfMS7+HS4AzG0PFmnuApf6DkjRg41gVfhAUwBt5DpsqsClqUA8AYEFRKXXDttl5Jj8CwgZK0gqG7CtgNMWJmECERQwYxywnYSnasgqSYzQiJIsUGiBvK0jTfZKkoAh1sTGV5gBt0xoolwxBkuiakG1tsgAtslvpFkZSOGUqYI9H4IGyqC+bMEKFIWEJn0RjBSOHBSUMIFbDgB75GpC1hG6AhGWKeRYCGJIXLjADsBLZpDVCNtumrRprQu5XWTf3ODyHrWyPgZz4YoF8FwBfGg33fXNlev9uuiPIK6XZ936zAHmVQmQSw2i7p1Ed2CZBMq5BciVcuKF6XS9Bbi7uQYwe37YVGkHVi4A860+s6nyX867M6QA0eiwY2C3acGLTrULC6LxJHNg/h4fg2OrToOXGwkHL+rnn7udUPchbqfvuULYzPV3qO0W3EBICyJrGwmFWstv2yDikyVRSTCLPZuRdSMDZM84Ue3sqjqhJrquIgCbVdWG2VtOPIw7fmyALdOgc5cy3TTJzwgy9Hrj7TJnNuyCfLzxW7BpKRdDYIRj/wGYYBAsGgRbPdWD2B6pQbdyNez2Xj3wmxA8L6+2P2FbW7ff1yWxn8fiRjwAAAAASUVORK5CYII="} : null; }
   };
   return api;
 }
@@ -797,12 +797,14 @@ function renderPrueba() {
       return `<button class="slot ${ok ? "" : "full"}" data-a="prSlot" data-f="${f}" data-h="${h}" ${ok ? "" : "disabled"}><b>${h}</b><small>${ok ? "Disponible" : "—"}</small></button>`; }).join("")}</div>`}
     <p class="small muted center" style="margin-top:20px">📍 Córdoba 340, Cipolletti · ¿Dudas? <a style="color:var(--accent2)" target="_blank" href="${waLink(WHATSAPP, "Hola! Tengo una consulta sobre la clase de prueba")}">Escribinos</a></p></div>`;
 }
+// Datos de la ficha recién firmada en ficha.html (mismo navegador): se precargan en la reserva
+function fichaPrevia() { try { const x = JSON.parse(localStorage.getItem("pf_ficha")); return x && Date.now() - x.t < 30 * 864e5 ? x : {}; } catch (e) { return {}; } }
 async function prElegir(f, h) {
   const box = await modal({title: "Tus datos", ok: "Reservar clase", cancel: "Volver",
     html: `<p class="sub">${fmtLargo(f)} · ${h} hs</p>
-      <label>Nombre y apellido</label><input name="nombre" autocomplete="name">
-      <label>Mail</label><input name="mail" type="email" inputmode="email" autocomplete="email" placeholder="nombre@gmail.com">
-      <label>WhatsApp</label><input name="tel" inputmode="tel" autocomplete="tel" placeholder="299 …">
+      <label>Nombre y apellido</label><input name="nombre" autocomplete="name" value="${esc(fichaPrevia().nombre || "")}">
+      <label>Mail</label><input name="mail" type="email" inputmode="email" autocomplete="email" placeholder="nombre@gmail.com" value="${esc(fichaPrevia().mail || "")}">
+      <label>WhatsApp</label><input name="tel" inputmode="tel" autocomplete="tel" placeholder="299 …" value="${esc(fichaPrevia().telefono || "")}">
       <label>¿Cómo nos conociste?</label><select name="como"><option value="">Elegí una opción</option><option>Instagram</option><option>Me lo recomendaron</option><option>Club Cipolletti</option><option>Pasé por el local</option><option>Otro</option></select>
       <p class="small muted" style="margin-top:10px">Te mandamos la confirmación a tu mail.</p>`});
   if (!box) return;
@@ -1203,8 +1205,7 @@ function vAgenda() {
           ${blk ? `<span class="badge warn">bloqueado</span>` : ""}${fuera ? `<span class="badge">fuera de horario</span>` : ""}</div>
         <div class="row">${!blk ? `<button class="btn sec sm" data-a="agAdd" data-h="${h}">+ Agregar</button>` : ""}</div></div>
         ${rs.map(r => { const a = esPrueba(r) ? null : alumnoDe(r.email);
-          return `<div class="person"><span class="name">${esc(nombreRes(r))}${alertaFicha(esPrueba(r) ? r.mail : r.email)}${esPrueba(r) ? ` <span class="badge prueba">PRUEBA</span>` : ""}${r.pago ? ` <span class="badge ok">💵 ${plata(r.pago.monto)}</span>` : ""}
-              ${a?.notas ? `<div class="small" style="color:var(--warn);margin-top:2px">⚠️ ${esc(a.notas)}</div>` : ""}</span>
+          return `<div class="person"><span class="name">${esc(nombreRes(r))}${alertaFicha(esPrueba(r) ? r.mail : r.email)}${esPrueba(r) ? ` <span class="badge prueba">PRUEBA</span>` : ""}${r.pago ? ` <span class="badge ok">💵 ${plata(r.pago.monto)}</span>` : ""}</span>
             ${esPrueba(r) && r.telefono && adm ? `<a class="att" style="text-decoration:none" target="_blank" href="${waLink(r.telefono, `Hola ${esc((r.nombre||"").split(" ")[0])}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`)}">WhatsApp</a>` : ""}
             <button class="att ${r.asistencia === true ? "yes" : ""}" data-a="att" data-id="${esc(r.id)}" data-v="1">Presente</button>
             <button class="att ${r.asistencia === false ? "no" : ""}" data-a="att" data-id="${esc(r.id)}" data-v="0">Ausente</button>
@@ -1268,7 +1269,7 @@ function personaFila(r) {
     sub = (cupo && n ? `${n}/${cupo} · ` : "") + (v ? `${v} ${v === 1 ? "vez" : "veces"}/sem` : ""); }
   const est = (r.asistencia === true ? "✅" : r.asistencia === false ? "❌" : "") + (r.pago ? "💵" : "");
   return `<button class="pp" data-a="persona" data-id="${esc(r.id)}"><span class="av ${prueba ? "pr" : ""}">${esc(ini)}</span>
-    <span class="nm"><b>${esc(nom)}${alertaFicha(prueba ? r.mail : r.email)}</b><small>${sub}</small>${a?.notas ? `<small style="color:var(--warn)">⚠️ ${esc(a.notas)}</small>` : ""}</span><span>${est}</span></button>`;
+    <span class="nm"><b>${esc(nom)}${alertaFicha(prueba ? r.mail : r.email)}</b><small>${sub}</small></span><span>${est}</span></button>`;
 }
 async function agregarEnDia(d) {
   const horas = slotsDelDia(state.cfg, d).filter(h => !bloqueo(d, h) && inicioMs(d, h) > Date.now() - 36e5);
@@ -1805,8 +1806,9 @@ function fichaHTML(f, mail) {
     ${fila("DNI", f.dni)}
     ${fila("Teléfono", f.telefono)}
     ${fila("Autoriza uso de imagen", f.imagen || "Sin respuesta")}
-    ${fila("Consentimiento firmado", [f.consentimiento, f.firma].filter(Boolean).join(" · "))}
-  </dl></div>`;
+    ${fila("Consentimiento firmado", [f.consentimiento, f.firma].filter(Boolean).join(" · ") + (f.hora ? ` · ${f.fecha} ${f.hora} hs` : ""))}
+  </dl>${/^data:image\/png;base64,/.test(f.firmaImg || "") ? `<div style="margin-top:10px"><div class="small muted">Firma</div><img src="${f.firmaImg}" alt="Firma de ${esc(f.firma || "")}" style="display:block;max-width:240px;max-height:100px;background:#fff;border-radius:8px;padding:6px;margin-top:4px"></div>` : ""}
+  ${/^https:\/\/drive\.google\.com\//.test(f.pdfUrl || "") ? `<p class="small" style="margin-top:8px"><a style="color:var(--accent2)" target="_blank" rel="noopener" href="${esc(f.pdfUrl)}">Ver PDF firmado</a></p>` : ""}</div>`;
 }
 
 /* ============================ EVENTOS ============================ */
