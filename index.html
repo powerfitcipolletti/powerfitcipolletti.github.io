@@ -876,12 +876,16 @@ function validarReserva(al, mis, f, h, excluirId) {
   return null;
 }
 const puedeModificar = r => (libreAl(state.alumno) && r.inicio + (Number(state.cfg.duracion) || 20) * 60e3 > Date.now()) || r.inicio - Date.now() >= state.cfg.cancelMin * 60e3;
-function diasReservables() {
-  const out = []; for (let i = 0; i <= state.cfg.diasAnticipacion; i++) out.push(addDays(hoy(), i)); return out;
+// Días que se pueden reservar. Si es una alumna con plan vigente, hasta el vencimiento de su plan;
+// si no (clase de prueba, sin vencimiento o vencido), los días de anticipación de Ajustes.
+function diasReservables(al) {
+  const h = hoy();
+  const n = al?.vence && al.vence >= h ? diasEntre(h, al.vence) : state.cfg.diasAnticipacion;
+  const out = []; for (let i = 0; i <= n; i++) out.push(addDays(h, i)); return out;
 }
 function suscribirTurnos() {
   state.unsub && state.unsub();
-  const d = diasReservables();
+  const d = diasReservables(state.alumno);
   state.unsub = state.B.listenTurnos(d[0], d[d.length - 1], m => { state.turnos = m; if (RUTA === "alumnos") renderAlumno(); });
 }
 function renderAlumno() {
@@ -895,7 +899,7 @@ function pintarAlumno() {
   const proximos = state.mis.filter(r => r.inicio > ahora).sort((a, b) => a.inicio - b.inicio);
   const lunHoy = lunesDe(hoy()), usadasSem = state.mis.filter(r => lunesDe(r.fecha) === lunHoy).length, maxSem = Number(cfg.maxSemana) || 0;
   const cicHoy = cicloDe(al, hoy()), usadasC = enCiclo(state.mis, cicHoy), cupo = cupoMes(al);
-  const dias = diasReservables();
+  const dias = diasReservables(al);
   if (!state.diaSel || !dias.includes(state.diaSel)) state.diaSel = dias.find(f => slotsDelDia(cfg, f).length && !diaBloqueado(f)) || dias[0];
   const f = state.diaSel, slots = slotsDelDia(cfg, f);
   const venceBadge = al.vence ? (() => { const d = diasEntre(hoy(), al.vence);
@@ -1056,7 +1060,7 @@ async function rechazarComprobante(id) {
 }
 // Turnos de la alumna en formato semana: una columna por día, con los horarios y los lugares libres
 function semanaAlumna(al, camb) {
-  const cfg = state.cfg, ahora = Date.now(), dias = diasReservables(), ult = dias[dias.length - 1];
+  const cfg = state.cfg, ahora = Date.now(), dias = diasReservables(al), ult = dias[dias.length - 1];
   if (!state.semAl) state.semAl = lunesDe(hoy());
   const lun = state.semAl, exc = camb?.id;
   const semDias = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(lun, i)).filter(d => d >= hoy() && d <= ult && ((dow(d) !== 0 && dow(d) !== 6) || slotsDelDia(cfg, d).length)); // sin sábados ni domingos, salvo que tengan horarios
