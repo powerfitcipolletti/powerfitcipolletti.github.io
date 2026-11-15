@@ -102,6 +102,10 @@
   .ftab .cm-m{display:none}
   .ftab .mc{display:none}
   .fin-tag{display:inline-block;margin-top:4px;font-size:11px;color:var(--accent2);border:1px solid var(--accent2);border-radius:999px;padding:1px 8px}
+  .fin-buscar{margin:12px 0 0}
+  .fin-buscar input{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .fin-buscar input:focus{outline:2px solid var(--accent2);outline-offset:1px}
+  .fin-tipo{font-weight:700} .fin-tipo.gasto{color:var(--bad)} .fin-tipo.ingreso{color:var(--ok)}
   .fin-cat{padding:16px}
   .fin-mini{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--muted);margin:4px 0 12px}
   .fin-mini b{color:var(--text)}
@@ -465,6 +469,7 @@ function demoBackend() {
     async setFin(id, d) { const {id: _, ...x} = d; if (!S.fin) S.fin = finDemo(); S.fin = S.fin.filter(r => r.id !== id); S.fin.push({...clone(x), id}); notify(); },
     async delFin(id) { S.fin = (S.fin || []).filter(r => r.id !== id); notify(); },
     async pagosDesde(f) { return []; },
+    async listFinTodo() { if (!S.fin) S.fin = finDemo(); return clone(S.fin); },
     async getFicha(email) { return email === "carla.demo@gmail.com" ? {fecha: "10/10/2026", nombre: "Carla Ruiz", dni: "30111222", edad: "42", nacimiento: "02/03/1984", telefono: "2995553333", altura: "165", peso: "68", actividad: "No", objetivo: "Tonificar y bajar de peso", condiciones: "Hipertensión", detalle: "Controlada con medicación", medicacion: "Sí", cualMedicacion: "Enalapril", lesion: "No", otra: "", imagen: "Sí", consentimiento: "Sí", firma: "Carla Ruiz", hora: "18:42", firmaImg: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABkAQMAAAAGz5+DAAAABlBMVEX///8LGjovth/2AAACe0lEQVR42u2WsW7UQBCGv7VPZ1fxlVdEstNRUh5SkrsCUfMI4Q1SpkBikaKkocgr8CCgTaBIg5RHWEVIUC4oxQK+M4Xt3fU5FyxEQXFT2eN///1ndmbWsLWtbW1r/7El9/iiv2aL5b9kEwoQf2I7BGAsH4aJy6oYoK1xpIt7vIeB51peABR9WHbplYzUAmBn0odNOPaeEoBf96RgjvVHJfQMmJ302d5xtn6idtSDiZK3XlzFZ2Ch+mxfMS7+HS4AzG0PFmnuApf6DkjRg41gVfhAUwBt5DpsqsClqUA8AYEFRKXXDttl5Jj8CwgZK0gqG7CtgNMWJmECERQwYxywnYSnasgqSYzQiJIsUGiBvK0jTfZKkoAh1sTGV5gBt0xoolwxBkuiakG1tsgAtslvpFkZSOGUqYI9H4IGyqC+bMEKFIWEJn0RjBSOHBSUMIFbDgB75GpC1hG6AhGWKeRYCGJIXLjADsBLZpDVCNtumrRprQu5XWTf3ODyHrWyPgZz4YoF8FwBfGg33fXNlev9uuiPIK6XZ936zAHmVQmQSw2i7p1Ed2CZBMq5BciVcuKF6XS9Bbi7uQYwe37YVGkHVi4A860+s6nyX867M6QA0eiwY2C3acGLTrULC6LxJHNg/h4fg2OrToOXGwkHL+rnn7udUPchbqfvuULYzPV3qO0W3EBICyJrGwmFWstv2yDikyVRSTCLPZuRdSMDZM84Ue3sqjqhJrquIgCbVdWG2VtOPIw7fmyALdOgc5cy3TTJzwgy9Hrj7TJnNuyCfLzxW7BpKRdDYIRj/wGYYBAsGgRbPdWD2B6pQbdyNez2Xj3wmxA8L6+2P2FbW7ff1yWxn8fiRjwAAAAASUVORK5CYII="} : null; }
   };
   return api;
@@ -705,6 +710,7 @@ async function firebaseBackend() {
     async listFin(y) { return (await getDocs(query(collection(db, "finanzas"), where("fecha", ">=", y + "-01-01"), where("fecha", "<=", y + "-12-31")))).docs.map(d => ({id: d.id, ...d.data()})); },
     async setFin(id, d) { const {id: _, ...x} = d; Object.keys(x).forEach(k => x[k] === undefined && delete x[k]); await setDoc(doc(db, "finanzas", id), x); },
     async delFin(id) { await deleteDoc(doc(db, "finanzas", id)); },
+    async listFinTodo() { return (await getDocs(collection(db, "finanzas"))).docs.map(d => ({id: d.id, ...d.data()})); },
     async pagosDesde(f) { try { return (await getDocs(query(collection(db, "pagos"), where("fecha", ">=", f)))).docs.map(d => ({id: d.id, ...d.data()})); } catch (e) { console.warn(e); return []; } },
     async getFicha(email) { if (!email) return null; try { const s = await getDoc(doc(db, "fichas", String(email).trim().toLowerCase())); return s.exists() ? s.data() : null; } catch (e) { console.warn(e); return null; } }
   };
@@ -1503,8 +1509,56 @@ function vFinanzas() {
   return `<div class="fin">
     <div class="fin-top"><div class="fin-seg" role="tablist">${seg}</div>
       <div class="fin-acc"><button class="btn sec sm" data-a="finExcel" title="Descargar Excel">⬇ Excel</button><button class="btn sec sm" data-a="finImport" title="Importar Excel">⬆ Importar</button><button class="btn sec sm" data-a="finRefresh" aria-label="Actualizar">↻</button></div></div>
-    ${sub === "resumen" ? finResumen(anio) : finLista(sub === "gastos" ? "gasto" : "ingreso", mes)}</div>`;
+    <div class="fin-buscar"><input id="finQ" type="search" placeholder="Buscar por nombre, nota, categoría o monto…" value="${esc(state.finQ || "")}" autocomplete="off" aria-label="Buscar movimientos"></div>
+    <div id="finCuerpo">${finCuerpo()}</div></div>`;
 }
+function finCuerpo() {
+  const sub = state.finSub || "ingresos";
+  if ((state.finQ || "").trim()) return finBusqueda(state.finQ);
+  return sub === "resumen" ? finResumen(finAnioAct()) : finLista(sub === "gastos" ? "gasto" : "ingreso", finMesAct());
+}
+// Buscador: busca en todos los movimientos de todos los años (sin importar mayúsculas ni tildes)
+const sinTildes = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+let finTodoCargado = false;
+async function cargarFinTodo() {
+  if (finTodoCargado) return;
+  const xs = await state.B.listFinTodo(), porAnio = {};
+  xs.forEach(x => { const y = String(x.fecha || "").slice(0, 4) || "sin fecha"; (porAnio[y] = porAnio[y] || []).push(x); });
+  Object.keys(porAnio).forEach(y => finCache[y] = porAnio[y]);
+  finTodoCargado = true;
+}
+function finBusqueda(q) {
+  const t = sinTildes(q).trim().split(/\s+/).filter(Boolean), num = q.replace(/[^\d]/g, "");
+  const xs = Object.values(finCache).flat().filter(x => !x.ignorado).filter(x => {
+    const txt = sinTildes([x.nombre, x.notas, x.categoria, x.medio, x.dni, x.concepto, x.tipo === "gasto" ? "gasto" : "ingreso", fmtDM(x.fecha || "")].join(" "));
+    const montoTxt = String(Math.round(Number(x.monto) || 0));
+    return t.every(w => txt.includes(w) || (/^\d[\d.,]*$/.test(w) && num.length >= 3 && montoTxt.includes(num)));
+  }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  if (!finTodoCargado) return `<div class="card sub center">Buscando…</div>`;
+  const I = xs.filter(x => x.tipo === "ingreso").reduce((s, x) => s + (Number(x.monto) || 0), 0), G = xs.filter(x => x.tipo === "gasto").reduce((s, x) => s + (Number(x.monto) || 0), 0);
+  const fch = f => f ? f.slice(8, 10) + "/" + f.slice(5, 7) + "/" + (f.startsWith("20") ? f.slice(2, 4) : f.slice(0, 4)) : "—"; // año completo si es raro (ej. 2926)
+  return `<div class="fin-kpis" style="margin-top:12px">
+      <div class="card"><div class="fin-kt">Encontrados</div><div class="fin-kn">${xs.length}</div><div class="sub">para “${esc(q.trim())}”</div></div>
+      <div class="card"><div class="fin-kt">Suman</div><div class="fin-med">${I ? `<span>Ingresos</span><b>${plata(I)}</b>` : ""}${G ? `<span>Gastos</span><b>${plata(G)}</b>` : ""}${!I && !G ? `<span class="sub">—</span>` : ""}</div></div></div>
+    ${xs.length ? `<div class="ftab"><table><thead><tr><th>Fecha</th><th>Detalle</th><th class="cm">Medio</th><th class="r">Monto</th></tr></thead><tbody>
+      ${xs.slice(0, 300).map(x => `<tr data-a="finEdit" data-id="${esc(x.id)}" data-y="${esc(String(x.fecha || "").slice(0, 4) || "sin fecha")}">
+        <td class="fd">${fch(x.fecha)}</td>
+        <td><div class="fn">${esc(x.nombre || "—")}</div>
+          <div class="sub"><span class="fin-tipo ${x.tipo}">${x.tipo === "gasto" ? "Gasto" : "Ingreso"}</span>${x.tipo === "gasto" && x.categoria ? " · " + esc(capi(x.categoria)) : ""}<span class="cm-m"> · ${esc(capi(x.medio))}</span></div>
+          ${x.notas ? `<div class="sub fnt">${esc(x.notas)}</div>` : ""}</td>
+        <td class="cm">${esc(capi(x.medio))}</td><td class="r fm ${x.tipo === "gasto" ? "neg" : ""}">${x.tipo === "gasto" ? "−" : ""}${plata(Number(x.monto) || 0)}</td></tr>`).join("")}
+      </tbody></table></div>${xs.length > 300 ? `<p class="sub center">Se muestran los primeros 300. Escribí algo más para achicar la búsqueda.</p>` : ""}`
+    : `<div class="card sub center">No hay movimientos que coincidan.</div>`}`;
+}
+let finQT;
+document.addEventListener("input", e => {
+  if (e.target.id !== "finQ") return;
+  state.finQ = e.target.value; clearTimeout(finQT);
+  finQT = setTimeout(async () => {
+    const pinta = () => { const c = document.getElementById("finCuerpo"); if (c) c.innerHTML = finCuerpo(); };
+    pinta(); if (state.finQ.trim() && !finTodoCargado) { try { await cargarFinTodo(); } catch (err) { toast(traducirError(err)); } pinta(); }
+  }, 180);
+});
 
 function finNav(txt, a) {
   return `<div class="fin-nav"><button class="btn sec sm" data-a="${a}" data-d="-1" aria-label="Anterior">‹</button><b>${txt}</b><button class="btn sec sm" data-a="${a}" data-d="1" aria-label="Siguiente">›</button></div>`;
