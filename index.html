@@ -101,6 +101,10 @@
   .ftab tr.tot td{font-weight:800;background:var(--card2);border-top:2px solid var(--line)}
   .ftab .cm-m{display:none}
   .ftab .mc{display:none}
+  .fac{min-width:34px;height:34px;border-radius:9px;border:1px solid #2a3550;background:transparent;font-size:17px;font-weight:800;cursor:pointer;line-height:1}
+  .fac.si{color:#3ddc97;border-color:#3ddc97;background:rgba(61,220,151,.12)}
+  .fac.no{color:#ff5b6b;border-color:rgba(255,91,107,.6)}
+  td.c,th.c{text-align:center}
   .fin-tag{display:inline-block;margin-top:4px;font-size:11px;color:var(--accent2);border:1px solid var(--accent2);border-radius:999px;padding:1px 8px}
   .fin-buscar{margin:12px 0 0}
   .fin-buscar input{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
@@ -1494,7 +1498,8 @@ async function sincronizarMp() {
     try {
       if (!ing) {
         const a = state.alumnos.find(x => x.email === p.email) || state.alumnos.find(x => p.suscripcion && x.mpSuscripcion === p.suscripcion);
-        const d = {tipo: "ingreso", fecha: p.fecha, nombre: a?.nombre || p.email || "Mercado Pago", alumnoEmail: a?.email || p.email || "", dni: "", medio: "Suscripción MP", monto,
+        const fi = await fichaDe(a?.email || p.email).catch(() => null);
+        const d = {tipo: "ingreso", fecha: p.fecha, nombre: a?.nombre || p.email || "Mercado Pago", alumnoEmail: a?.email || p.email || "", dni: fi?.dni ? String(fi.dni) : "", medio: "Suscripción MP", monto,
           neto: com ? (p.neto != null ? Number(p.neto) : Math.round((monto - com) * 100) / 100) : undefined, notas: "Débito automático de Mercado Pago", origen: "mp"};
         await state.B.setFin(id, d); ing = {...d, id}; finCache[y].push(ing);
       } else if (com && ing.neto == null && !ing.ignorado) {
@@ -1520,6 +1525,7 @@ async function abrirFinanzas(forzar) {
 // Lo llaman la agenda (efectivo) y la aprobación de comprobantes: si falla, no frena lo demás
 async function finAuto(id, d) {
   try {
+    if (d && d.tipo === "ingreso" && !d.dni && d.alumnoEmail) { const f = await fichaDe(d.alumnoEmail).catch(() => null); if (f?.dni) d.dni = String(f.dni); }
     if (d) await state.B.setFin(id, d); else await state.B.delFin(id);
     const y = (d?.fecha || "").slice(0, 4);
     Object.keys(finCache).forEach(k => finCache[k] = finCache[k].filter(x => x.id !== id));
@@ -1597,23 +1603,24 @@ function finLista(tipo, mes) {
   const rows = finVivos(y).filter(x => x.tipo === tipo && (x.fecha || "").startsWith(mes))
     .sort((a, b) => b.fecha.localeCompare(a.fecha) || String(b.id).localeCompare(String(a.id)));
   const total = rows.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+  const sinFac = ing ? rows.filter(x => !x.facturado) : [];
   const conNeto = ing && rows.some(x => x.neto != null), neto = rows.reduce((t, x) => t + (x.neto != null ? Number(x.neto) : (Number(x.monto) || 0)), 0);
   const porMedio = {}; rows.forEach(x => { const k = capi(x.medio) || "Sin medio"; porMedio[k] = (porMedio[k] || 0) + (Number(x.monto) || 0); });
   const auto = x => ["mp", "efectivo", "app", "alumno"].includes(x.origen) ? `<span class="fin-tag">${{mp: "MP · automático", efectivo: "Agenda · automático", app: "Comprobante · automático", alumno: "Desde Alumnos"}[x.origen]}</span>` : "";
   return `${nav}
     <div class="fin-kpis">
       <div class="card"><div class="fin-kt">${ing ? "Ingresos" : "Gastos"} del mes</div><div class="fin-kn">${plata(total)}</div>
-        <div class="sub">${rows.length} ${ing ? (rows.length === 1 ? "cobro" : "cobros") : (rows.length === 1 ? "pago" : "pagos")}</div>${conNeto ? `<div class="sub">Neto a facturar (sin comisión MP): <b>${plata(neto)}</b></div>` : ""}</div>
+        <div class="sub">${rows.length} ${ing ? (rows.length === 1 ? "cobro" : "cobros") : (rows.length === 1 ? "pago" : "pagos")}</div>${conNeto ? `<div class="sub">Neto a facturar (sin comisión MP): <b>${plata(neto)}</b></div>` : ""}${ing && rows.length ? `<div class="sub">${sinFac.length ? `✗ Sin facturar: <b>${sinFac.length}</b> (${plata(sinFac.reduce((t, x) => t + (Number(x.monto) || 0), 0))})` : "✓ Todo facturado"}</div>` : ""}</div>
       <div class="card"><div class="fin-kt">Por medio de pago</div><div class="fin-med">${Object.entries(porMedio).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><b>${plata(v)}</b>`).join("") || `<span class="sub">—</span>`}</div></div>
     </div>
     <button class="btn fin-add" data-a="finNuevo" data-t="${tipo}">+ Agregar ${ing ? "ingreso" : "gasto"}</button>
-    ${rows.length ? `<div class="ftab"><table><thead><tr><th>Fecha</th><th>${ing ? "Cliente" : "Proveedor"}</th><th class="cm">Medio</th><th class="r">Monto</th></tr></thead><tbody>
+    ${rows.length ? `<div class="ftab"><table><thead><tr><th>Fecha</th><th>${ing ? "Cliente" : "Proveedor"}</th><th class="cm">Medio</th><th class="r">Monto</th>${ing ? `<th class="c">Fact.</th>` : ""}</tr></thead><tbody>
       ${rows.map(x => `<tr data-a="finEdit" data-id="${esc(x.id)}" data-y="${y}">
         <td class="fd">${fmtDM(x.fecha)}</td>
         <td><div class="fn">${esc(x.nombre || "—")}</div>
-          <div class="sub">${[!ing && x.categoria ? capi(x.categoria) : "", `<span class="cm-m">${esc(capi(x.medio))}</span>`].filter(Boolean).join(" · ")}</div>
+          <div class="sub">${[!ing && x.categoria ? capi(x.categoria) : "", ing ? (x.dni ? "DNI " + esc(x.dni) : `<span style="color:#ffb020">Sin DNI</span>`) : "", `<span class="cm-m">${esc(capi(x.medio))}</span>`].filter(Boolean).join(" · ")}</div>
           ${x.notas ? `<div class="sub fnt">${esc(x.notas)}</div>` : ""}${auto(x)}</td>
-        <td class="cm">${esc(capi(x.medio))}</td><td class="r fm">${plata(Number(x.monto) || 0)}${ing && x.neto != null ? `<div class="sub">Neto ${plata(Number(x.neto))}</div>` : ""}</td></tr>`).join("")}
+        <td class="cm">${esc(capi(x.medio))}</td><td class="r fm">${plata(Number(x.monto) || 0)}${ing && x.neto != null ? `<div class="sub">Neto ${plata(Number(x.neto))}</div>` : ""}</td>${ing ? `<td class="c"><button class="fac ${x.facturado ? "si" : "no"}" data-a="finFac" data-id="${esc(x.id)}" data-y="${y}" title="${x.facturado ? "Facturado · tocá para desmarcar" : "Sin facturar · tocá cuando lo factures"}" aria-label="${x.facturado ? "Facturado" : "Sin facturar"}">${x.facturado ? "✓" : "✗"}</button></td>` : ""}</tr>`).join("")}
       </tbody></table></div>` : `<div class="card sub center">No hay ${ing ? "ingresos" : "gastos"} cargados en ${MESES_F[mm - 1].toLowerCase()}.</div>`}`;
 }
 
@@ -1692,7 +1699,7 @@ async function finEditar(id, tipo, y) {
   if (!d.fecha) return toast("Revisá la fecha: escribila como 15/11/2026");
   if (!(d.monto > 0)) return toast("Poné el monto");
   if (!d.nombre) return toast(ing ? "Poné el nombre del cliente" : "Poné el proveedor");
-  if (x) { d.origen = x.origen || ""; ["concepto", "categoriaIng", "plan", "alumnoEmail"].forEach(k => { if (x[k] != null) d[k] = x[k]; }); }
+  if (x) { d.origen = x.origen || ""; ["concepto", "categoriaIng", "plan", "alumnoEmail", "facturado", "facturadoPor", "facturadoEl", "mpPago"].forEach(k => { if (x[k] != null) d[k] = x[k]; }); if (x.neto != null && Number(x.monto) === d.monto) d.neto = x.neto; }
   else d.origen = "manual";
   if (!x && ing && !(await confirmarSinDuplicar({nombre: d.nombre, fecha: d.fecha, monto: d.monto}))) return;
   d.por = state.user.email; d.editado = Date.now();
@@ -2343,6 +2350,13 @@ document.addEventListener("click", async e => {
     case "finVerMes": state.finMes = el.dataset.m; renderAdmin(); break;
     case "finNuevo": finEditar(null, el.dataset.t); break;
     case "finEdit": finEditar(el.dataset.id, null, el.dataset.y); break;
+    case "finFac": {
+      const y = el.dataset.y, x = (finCache[y] || []).find(r => r.id === el.dataset.id); if (!x) break;
+      const {id, ...resto} = x, nuevo = !x.facturado;
+      const d = {...resto, facturado: nuevo, facturadoPor: nuevo ? state.user.email : "", facturadoEl: nuevo ? Date.now() : 0};
+      if (await run(() => state.B.setFin(id, d), nuevo ? "Marcado como facturado" : "Marcado sin facturar")) { Object.assign(x, d); renderAdmin(); }
+      break;
+    }
     case "finExcel": finExportar(); break;
     case "finImport": finImportar(); break;
     case "finRefresh": await abrirFinanzas(true); renderAdmin(); toast("Actualizado"); break;
