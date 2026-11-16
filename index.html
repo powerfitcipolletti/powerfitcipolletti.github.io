@@ -1194,7 +1194,8 @@ async function aprobarComprobante(id) {
   if (!inicio) return toast("Elegí la fecha de inicio");
   if (await run(async () => {
     await state.B.saveAlumno({...a, inicio, vence, activo: true});
-    await state.B.resolverComprobante(id, {estado: "aprobado", inicio, vence, revisado: h});
+    // avisoAlumna: true para que el programa de avisos no mande un segundo mail (el aviso lo manda la difusión de abajo, si se marcó)
+    await state.B.resolverComprobante(id, {estado: "aprobado", inicio, vence, revisado: h, avisoAlumna: true});
     if (c.monto > 0) await finAuto("comp_" + id, {tipo: "ingreso", fecha: h, nombre: a.nombre || a.email, alumnoEmail: a.email, dni: "", medio: "Transferencia", monto: Number(c.monto),
       notas: "Comprobante aprobado" + (c.nota ? " · " + c.nota : ""), origen: "app"});
     // mail automático: lo manda el programa de avisos desde el Gmail del gimnasio (igual que los mails masivos)
