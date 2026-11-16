@@ -303,13 +303,14 @@ const pagoNombre = id => (PAGOS.find(p => p.id === id) || {nombre: id || "—"})
 const vecesSemana = a => (PLANES.find(p => p.id === a?.plan) || {}).veces || 0;
 // Turnos que incluye el plan cada 30 días (cupoMes en PLANES)
 // Plan estirado (excepción): el total de turnos del período pago, para usar en cualquier momento hasta el vencimiento
-const cupoMes = a => { const c = (PLANES.find(p => p.id === a?.plan) || {}).cupoMes || 0; return a?.cuposHastaVence ? c * (PAGOS.find(x => x.id === a.pago)?.meses || 1) : c; };
+// Total de turnos del plan pagado (ej. 1 vez por semana x 2 meses = 8): se pueden organizar como quieran hasta el vencimiento
+const cupoMes = a => { const c = (PLANES.find(p => p.id === a?.plan) || {}).cupoMes || 0; return a?.vence && a?.inicio && a.vence >= a.inicio ? c * (PAGOS.find(x => x.id === a.pago)?.meses || 1) : c; };
 const fmtDM = f => `${Number(f.slice(8))}/${Number(f.slice(5,7))}`;
 // Ciclo de 30 días que contiene la fecha f, contando desde el día en que pagó (inicio).
 // Si paga 2 o 3 meses, tiene 2 o 3 ciclos seguidos de 30 días, cada uno con su cupo.
 function cicloDe(a, f) {
   if (!a?.inicio) { const ym = f.slice(0, 7); return {desde: ym + "-01", hasta: ym + "-31"}; }
-  if (a.cuposHastaVence && a.vence && a.vence >= a.inicio) return {desde: a.inicio, hasta: a.vence};
+  if (a.vence && a.vence >= a.inicio) return {desde: a.inicio, hasta: a.vence}; // todo el plan pagado, como un solo total
   let n = Math.max(0, Math.floor(diasEntre(a.inicio, f) / 30));
   // El último ciclo del período pago llega hasta el vencimiento (así no aparece un ciclo extra por 1 o 2 días sueltos)
   // Cantidad de ciclos del período pago: la suscripción de 2 o 3 meses tiene 2 o 3; el pago mensual ("Otro") es un solo ciclo
@@ -1006,7 +1007,7 @@ function validarReserva(al, mis, f, h, excluirId) {
   const cupo = cupoMes(al);
   if (cupo > 0) {
     const c = cicloDe(al, f), usadasC = enCiclo(otras, c);
-    if (usadasC >= cupo && !(suelta && suelta.fecha >= c.desde && suelta.fecha <= c.hasta)) return `Tu plan incluye ${cupo} turnos ${al?.cuposHastaVence ? "en total" : "cada 30 días"} y ya tenés ${usadasC} entre el ${fmtDM(c.desde)} y el ${fmtDM(c.hasta)}`;
+    if (usadasC >= cupo && !(suelta && suelta.fecha >= c.desde && suelta.fecha <= c.hasta)) return `Tu plan incluye ${cupo} turnos en total y ya tenés ${usadasC} entre el ${fmtDM(c.desde)} y el ${fmtDM(c.hasta)}`;
   }
   return null;
 }
