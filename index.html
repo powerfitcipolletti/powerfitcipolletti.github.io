@@ -1516,8 +1516,12 @@ async function registrarPago(id) {
       <label>Monto ($)</label><input name="monto" type="number" inputmode="numeric" min="0" value="${esc(p.monto ?? "")}" placeholder="Ej: 15000">
       <label>Concepto</label><select name="concepto">${CONCEPTOS.map(c => `<option ${p.concepto === c ? "selected" : ""}>${c}</option>`).join("")}</select>
       <label>Nota (opcional)</label><input name="nota" value="${esc(p.nota || "")}">
+      ${state.rol === "admin" && !esPrueba(r) && alumnoDe(r.email) && !r.pago ? `<label class="chk" style="margin-top:12px"><input type="checkbox" name="pack"> Es el pago de un pack nuevo: arranca con esta clase</label>
+      <div id="packOp" style="display:none"><label>Plan</label><select name="plan">${PLANES.map(x => `<option value="${x.id}" ${(alumnoDe(r.email).plan || "2x") === x.id ? "selected" : ""}>${x.nombre} (${x.cupoMes} clases)</option>`).join("")}</select>
+      <p class="small muted" style="margin-top:6px">El pack va del ${fmtDM(r.fecha)} al ${fmtDM(addMonths(r.fecha, 1))}. Esta clase cuenta como la 1.</p></div>` : ""}
       ${r.pago ? `<p class="small muted" style="margin-top:8px">Cargado por ${esc(nombreEquipo(p.por))}</p><button class="btn bad sm" style="margin-top:10px" data-quitar="1">Quitar pago</button>` : ""}`,
-    onOpen: b => { const q = b.querySelector("[data-quitar]"); if (q) q.onclick = ev => { ev.preventDefault(); quitar = true; b.querySelector('[data-m="1"]').click(); }; }});
+    onOpen: b => { const ck = b.querySelector("[name=pack]"); if (ck) ck.onchange = () => { b.querySelector("#packOp").style.display = ck.checked ? "" : "none"; };
+      const q = b.querySelector("[data-quitar]"); if (q) q.onclick = ev => { ev.preventDefault(); quitar = true; b.querySelector('[data-m="1"]').click(); }; }});
   if (!box) return;
   let v = null;
   if (!quitar) {
@@ -1525,7 +1529,13 @@ async function registrarPago(id) {
     if (!(monto > 0)) return toast("Poné el monto");
     v = {monto, concepto: box.querySelector("[name=concepto]").value, nota: box.querySelector("[name=nota]").value.trim(), por: state.user.email, cuando: Date.now()};
   }
-  if (await run(() => state.B.setPago(r, v), quitar ? "Pago quitado" : "Pago registrado")) {
+  // Pack nuevo pagado en efectivo: el plan arranca el día de esta clase (cuenta como la 1) y vence al mes
+  const ckP = box.querySelector("[name=pack]"), al = alumnoDe(r.email);
+  const pack = !quitar && ckP && ckP.checked && al ? {plan: box.querySelector("[name=plan]").value} : null;
+  if (pack) { pack.inicio = r.fecha; pack.vence = addMonths(r.fecha, 1); v.pack = pack.plan; }
+  if (await run(async () => { await state.B.setPago(r, v);
+      if (pack) await state.B.saveAlumno({...al, plan: pack.plan, pago: "otro", inicio: pack.inicio, vence: pack.vence, activo: true, cuposHastaVence: false}); },
+    pack ? "Pago registrado y plan activado hasta el " + fmtDM(pack.vence) : quitar ? "Pago quitado" : "Pago registrado")) {
     // también queda como ingreso en Finanzas
     await finAuto("ef_" + r.id, v ? {tipo: "ingreso", fecha: r.fecha, nombre: nombreRes(r), alumnoEmail: String(r.email || r.mail || "").toLowerCase(), dni: "", medio: "Efectivo", monto: v.monto,
       notas: [v.concepto, v.nota].filter(Boolean).join(" · "), origen: "efectivo", por: state.user.email} : null);
