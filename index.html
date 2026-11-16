@@ -453,6 +453,7 @@ function demoBackend() {
     },
     async setAsistencia(r, v) { const x = S.reservas.find(y => y.id === r.id); if (x) { if (v == null) delete x.asistencia; else x.asistencia = v; } notify(); },
     async editarPrueba(r, d) { const x = S.reservas.find(y => y.id === r.id); if (x) Object.assign(x, d); notify(); },
+    async setNotaRes(id, nota) { const x = S.reservas.find(y => y.id === id); if (x) { if (nota) x.nota = nota; else delete x.nota; } notify(); },
     async getAlumno(email) { const a = S.alumnos.find(a => a.email === email); return a ? clone(a) : null; },
     async listAlumnos() { return clone(S.alumnos); },
     async saveAlumno(a) { S.alumnos = S.alumnos.filter(x => x.email !== a.email); S.alumnos.push(clone(a)); notify(); },
@@ -696,6 +697,8 @@ async function firebaseBackend() {
       });
     },
     async setAsistencia(r, v) { await updateDoc(doc(db, "reservas", r.id), {asistencia: v == null ? deleteField() : v}); },
+    // Comentario del turno (ej. "abona en efectivo"), visible en la agenda de dueñas y profes
+    async setNotaRes(id, nota) { await updateDoc(doc(db, "reservas", id), {nota: nota ? nota : deleteField()}); },
     // Corrige nombre, mail o WhatsApp de una clase de prueba (y el teléfono de su ficha, si se puede)
     async editarPrueba(r, d) {
       await updateDoc(doc(db, "reservas", r.id), d);
@@ -1429,14 +1432,17 @@ function bloqueSlot(d, h, rs, adm) {
 function personaFila(r) {
   const prueba = esPrueba(r), a = prueba ? null : alumnoDe(r.email), nom = nombreRes(r);
   const ini = nom.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase() || "?";
-  let sub = "";
+  let sub = "", sinPack = false;
   if (prueba) sub = `<span class="badge prueba">PRUEBA</span>` + alertaPruebaRep(r);
   else if (a) { const cupo = cupoMes(a), c = cicloDe(a, r.fecha);
     const mias = (state.resRango || []).filter(x => x.email === r.email && x.fecha >= c.desde && x.fecha <= c.hasta).sort((x, y) => x.inicio - y.inicio);
     const n = mias.findIndex(x => x.id === r.id) + 1;
     const v = (PLANES.find(p => p.id === a.plan) || {}).veces;
-    sub = (cupo && n ? `${n}/${cupo} · ` : "") + (v ? `${v} ${v === 1 ? "vez" : "veces"}/sem` : ""); }
-  const est = (r.asistencia === true ? "✅" : r.asistencia === false ? "❌" : "") + (r.pago ? "💵" : "");
+    // Turno fuera del pack (vencido, antes del inicio o pasado del total): se marca como en SigueFit
+    sinPack = !libreAl(a) && (!a.inicio || !a.vence || r.fecha > a.vence || r.fecha < a.inicio || (cupo > 0 && n > cupo));
+    sub = sinPack ? `<span style="color:var(--warn)">Sin pack</span>` : (cupo && n ? `${n}/${cupo} · ` : "") + (v ? `${v} ${v === 1 ? "vez" : "veces"}/sem` : "");
+    if (r.nota) sub += ` · ${esc(r.nota)}`; }
+  const est = (sinPack ? "🚫" : "") + (r.asistencia === true ? "✅" : r.asistencia === false ? "❌" : "") + (r.pago ? "💵" : "");
   return `<button class="pp" data-a="persona" data-id="${esc(r.id)}"><span class="av ${prueba ? "pr" : ""}">${esc(ini)}</span>
     <span class="nm"><b>${esc(nom)}${alertaFicha(prueba ? r.mail : r.email)}</b><small>${sub}</small></span><span>${est}</span></button>`;
 }
@@ -1462,6 +1468,7 @@ async function accionesPersona(id) {
       ${bt("mover", "Mover turno")}
       ${adm && prueba && tel ? bt("wa", "WhatsApp") : ""}
       ${adm && prueba ? bt("editarPr", "✏️ Corregir nombre, mail o WhatsApp") : ""}
+      ${adm && !prueba ? bt("nota", r.nota ? "📝 Comentario: " + esc(r.nota) : "📝 Agregar comentario") : ""}
       ${adm && prueba && !yaEsAlumno(r) ? bt("alta", "Dar de alta como alumna") : ""}
       ${adm ? bt("quitar", "Quitar del turno", "bad") : ""}`,
     onOpen: b => b.querySelectorAll("[data-act]").forEach(x => x.addEventListener("click", () => { act = x.dataset.act; }))});
@@ -1471,6 +1478,16 @@ async function accionesPersona(id) {
   if (act === "mover") return agMover(id);
   if (act === "quitar") return quitarDelTurno(id);
   if (act === "editarPr") return editarDatosPrueba(id);
+  if (act === "nota") {
+    const nom0 = nombreRes(r);
+    const b2 = await modal({title: "Comentario del turno", ok: "Guardar", cancel: "Volver", html: `<p class="sub">${esc(nom0)} · ${fmtCorto(r.fecha)} ${r.hora}</p><input name="nota" value="${esc(r.nota || "")}" placeholder="Ej: abona en efectivo">`});
+    if (!b2) return;
+    const nota = b2.querySelector("[name=nota]").value.trim();
+    if (await run(() => state.B.setNotaRes(r.id, nota), "Comentario guardado")) {
+      [state.resDia, state.resSem, state.resMes, state.resRango].forEach(arr => (arr || []).forEach(x => { if (x.id === r.id) { if (nota) x.nota = nota; else delete x.nota; } }));
+      renderAdmin(); }
+    return;
+  }
   if (act === "wa") return window.open(waLink(tel, `Hola ${(r.nombre || "").split(" ")[0]}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`), "_blank");
   if (act === "alta") return editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota});
   if (act === "ficha") { const f = await fichaDe(mail); return modal({title: "Ficha de " + nombreRes(r), html: fichaHTML(f, mail), ok: "", cancel: "Cerrar"}); }
@@ -2124,9 +2141,10 @@ async function agAgregar(h, fecha) {
   const opts = state.alumnos.filter(a => a.activo !== false && !ya.includes(a.email));
   if (!opts.length) return toast("No hay alumnos activos para agregar");
   const box = await modal({title: `Agregar a las ${h}`, html: `<p class="sub">${fmtLargo(f)}</p>
-    <label>Alumno</label><select name="al">${opts.map(a => `<option value="${esc(a.email)}">${esc(a.nombre || a.email)}</option>`).join("")}</select>`, ok: "Agregar"});
+    <label>Alumno</label><select name="al">${opts.map(a => `<option value="${esc(a.email)}">${esc(a.nombre || a.email)}</option>`).join("")}</select>
+    <label>Comentario (opcional)</label><input name="nota" placeholder="Ej: abona en efectivo">`, ok: "Agregar"});
   if (!box) return;
-  const email = box.querySelector("[name=al]").value;
+  const email = box.querySelector("[name=al]").value, nota = box.querySelector("[name=nota]").value.trim();
   const avisos = [];
   if (ya.length >= state.cfg.capacidad) avisos.push(`El turno ya tiene ${ya.length}/${state.cfg.capacidad} personas`);
   const mis = (await state.B.reservasRango(addDays(f, -1), addDays(f, 1))).filter(r => r.email === email);
@@ -2142,7 +2160,7 @@ async function agAgregar(h, fecha) {
   if (cupo) { const c = cicloDe(al, f), n = (await state.B.reservasRango(c.desde, c.hasta)).filter(r => r.email === email).length;
     if (n >= cupo) avisos.push(`Ya usó sus ${cupo} turnos del ${fmtDM(c.desde)} al ${fmtDM(c.hasta)} (${planNombre(al.plan)})`); }
   if (avisos.length && !await modal({title: "Atención", html: `<p>${avisos.map(esc).join("<br>")}</p><p class="sub" style="margin-top:8px">Podés agregarlo igual.</p>`, ok: "Agregar igual"})) return;
-  if (await run(() => state.B.reservar(email, f, h, {admin: true}), "Agregado")) { await cargarAdmin(); renderAdmin(); }
+  if (await run(async () => { await state.B.reservar(email, f, h, {admin: true}); if (nota) await state.B.setNotaRes(slotId(f, h) + "_" + email, nota); }, "Agregado")) { await cargarAdmin(); renderAdmin(); }
 }
 async function agMover(id) {
   const r = resPorId(id); if (!r) return;
@@ -2357,7 +2375,7 @@ function alertaFicha(email) {
     state.fichas[email] = undefined;
     if (!fichasPend) { fichasPend = new Set(); setTimeout(async () => {
       const lista = [...fichasPend]; fichasPend = null;
-      await Promise.all(lista.map(async m => { try { const f = await fichaDe(m); state.fichas[m] = nivelFicha(f); (state.consOK = state.consOK || {})[m] = consentimientoOK(f); } catch (e) { state.fichas[m] = null; } }));
+      await Promise.all(lista.map(async m => { try { const f = await fichaDe(m); state.fichas[m] = nivelFicha(f); (state.consOK = state.consOK || {})[m] = !!f; /* la ficha vieja (Google Form) también vale como consentimiento */ } catch (e) { state.fichas[m] = null; } }));
       if (lista.some(m => state.fichas[m]) && RUTA !== "alumnos" && !$modal.classList.contains("on")) renderAdmin();
     }, 0); }
     fichasPend.add(email);
