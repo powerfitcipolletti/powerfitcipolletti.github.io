@@ -477,6 +477,7 @@ function demoBackend() {
     async setFin(id, d) { const {id: _, ...x} = d; if (!S.fin) S.fin = finDemo(); S.fin = S.fin.filter(r => r.id !== id); S.fin.push({...clone(x), id}); notify(); },
     async delFin(id) { S.fin = (S.fin || []).filter(r => r.id !== id); notify(); },
     async pagosDesde(f) { return []; },
+    async mpLiberaciones() { return []; }, async liberarPrueba() {}, async pruebaVigente() { return true; }, async getTransferidos() { return {}; }, async marcarTransferidos() {},
     async listFinTodo() { if (!S.fin) S.fin = finDemo(); return clone(S.fin); },
     async getFicha(email) { return email === "carla.demo@gmail.com" ? {fecha: "10/10/2026", nombre: "Carla Ruiz", dni: "30111222", edad: "42", nacimiento: "02/03/1984", telefono: "2995553333", altura: "165", peso: "68", actividad: "No", objetivo: "Tonificar y bajar de peso", condiciones: "Hipertensión", detalle: "Controlada con medicación", medicacion: "Sí", cualMedicacion: "Enalapril", lesion: "No", otra: "", imagen: "Sí", consentimiento: "Sí", firma: "Carla Ruiz", hora: "18:42", firmaImg: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABkAQMAAAAGz5+DAAAABlBMVEX///8LGjovth/2AAACe0lEQVR42u2WsW7UQBCGv7VPZ1fxlVdEstNRUh5SkrsCUfMI4Q1SpkBikaKkocgr8CCgTaBIg5RHWEVIUC4oxQK+M4Xt3fU5FyxEQXFT2eN///1ndmbWsLWtbW1r/7El9/iiv2aL5b9kEwoQf2I7BGAsH4aJy6oYoK1xpIt7vIeB51peABR9WHbplYzUAmBn0odNOPaeEoBf96RgjvVHJfQMmJ302d5xtn6idtSDiZK3XlzFZ2Ch+mxfMS7+HS4AzG0PFmnuApf6DkjRg41gVfhAUwBt5DpsqsClqUA8AYEFRKXXDttl5Jj8CwgZK0gqG7CtgNMWJmECERQwYxywnYSnasgqSYzQiJIsUGiBvK0jTfZKkoAh1sTGV5gBt0xoolwxBkuiakG1tsgAtslvpFkZSOGUqYI9H4IGyqC+bMEKFIWEJn0RjBSOHBSUMIFbDgB75GpC1hG6AhGWKeRYCGJIXLjADsBLZpDVCNtumrRprQu5XWTf3ODyHrWyPgZz4YoF8FwBfGg33fXNlev9uuiPIK6XZ936zAHmVQmQSw2i7p1Ed2CZBMq5BciVcuKF6XS9Bbi7uQYwe37YVGkHVi4A860+s6nyX867M6QA0eiwY2C3acGLTrULC6LxJHNg/h4fg2OrToOXGwkHL+rnn7udUPchbqfvuULYzPV3qO0W3EBICyJrGwmFWstv2yDikyVRSTCLPZuRdSMDZM84Ue3sqjqhJrquIgCbVdWG2VtOPIw7fmyALdOgc5cy3TTJzwgy9Hrj7TJnNuyCfLzxW7BpKRdDYIRj/wGYYBAsGgRbPdWD2B6pQbdyNez2Xj3wmxA8L6+2P2FbW7ff1yWxn8fiRjwAAAAASUVORK5CYII="} : null; }
   };
@@ -580,6 +581,9 @@ async function firebaseBackend() {
         throw e;
       }
     },
+    // Si se cancela una clase de prueba, el mail queda libre para volver a reservar (sin repetir la ficha)
+    async liberarPrueba(mail) { const m = String(mail || "").trim().toLowerCase(); if (m) await deleteDoc(doc(db, "pruebasMail", m)); },
+    async pruebaVigente(mail) { try { return (await getDoc(doc(db, "pruebasMail", String(mail).trim().toLowerCase()))).exists(); } catch (e) { return true; } },
     // Registra los mails que ya tuvieron clase de prueba (para las cargadas antes de este control)
     async marcarPruebasUsadas(lista) {
       const mails = [...new Set(lista.map(r => String(r.mail || "").trim().toLowerCase()).filter(m => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)))];
@@ -746,6 +750,10 @@ async function firebaseBackend() {
     async delFin(id) { await deleteDoc(doc(db, "finanzas", id)); },
     async listFinTodo() { return (await getDocs(collection(db, "finanzas"))).docs.map(d => ({id: d.id, ...d.data()})); },
     async pagosDesde(f) { try { return (await getDocs(query(collection(db, "pagos"), where("fecha", ">=", f)))).docs.map(d => ({id: d.id, ...d.data()})); } catch (e) { console.warn(e); return []; } },
+    // Cobros de Mercado Pago con fecha en que la plata queda disponible (la guarda el programa de avisos)
+    async mpLiberaciones(desde) { try { return await this.vivo("mplib_" + desde, () => query(collection(db, "pagos"), where("liberacion", ">=", desde)), d => ({id: d.id, ...d.data()})); } catch (e) { console.warn(e); return []; } },
+    async getTransferidos() { try { const d = await getDoc(doc(db, "config", "transferencias")); return d.exists() ? d.data() : {}; } catch (e) { console.warn(e); return {}; } },
+    async marcarTransferidos(ids) { const o = {}; ids.forEach(i => o[i] = Date.now()); await setDoc(doc(db, "config", "transferencias"), o, {merge: true}); },
     async getFicha(email) { if (!email) return null; try { const s = await getDoc(doc(db, "fichas", String(email).trim().toLowerCase())); return s.exists() ? s.data() : null; } catch (e) { console.warn(e); return null; } }
   };
 }
@@ -902,6 +910,7 @@ function renderPrueba() {
   $app.innerHTML = `${demoBar()}<div class="wrap" style="padding-top:22px"><div class="center">${LOGO}</div>
     <div class="center" style="margin:18px 0 6px"><h2 style="transform:none;margin:0">Clase de prueba gratis</h2>
     <p class="muted small" style="margin-top:4px">${cfg.duracion} minutos, con la profe al lado. Elegí el día y el horario que te quede cómodo.</p></div>
+    ${pr.previo ? `<div class="note acc">Tu clase del ${fmtLargo(pr.previo.fecha)} se canceló. Elegí otro día y horario: tu ficha ya está guardada.</div>` : ""}
     <div class="days">${dias.map(d => { const off = diaBloqueado(d) || !slotsDelDia(cfg, d).some(h => libre(d, h));
       return `<button class="day ${d === f ? "sel" : ""} ${off ? "off" : ""}" data-a="prDia" data-f="${d}"><small>${DIAS[dow(d)]}</small><b>${Number(d.slice(8))}</b><small>${MESES[Number(d.slice(5,7))-1].slice(0,3)}</small></button>`; }).join("")}</div>
     ${diaBloqueado(f) || !slots.length ? `<div class="empty">No hay clases este día</div>` : `<div class="slots">${slots.map(h => {
@@ -914,9 +923,9 @@ function fichaPrevia() { try { const x = JSON.parse(localStorage.getItem("pf_fic
 async function prElegir(f, h) {
   const box = await modal({title: "Tus datos", ok: "Reservar clase", cancel: "Volver",
     html: `<p class="sub">${fmtLargo(f)} · ${h} hs</p>
-      <label>Nombre y apellido</label><input name="nombre" autocomplete="name" value="${esc(fichaPrevia().nombre || "")}">
-      <label>Mail</label><input name="mail" type="email" inputmode="email" autocomplete="email" placeholder="nombre@gmail.com" value="${esc(fichaPrevia().mail || "")}">
-      <label>WhatsApp</label><input name="tel" inputmode="tel" autocomplete="tel" placeholder="299 …" value="${esc(fichaPrevia().telefono || "")}">
+      <label>Nombre y apellido</label><input name="nombre" autocomplete="name" value="${esc((pr.previo || {}).nombre || fichaPrevia().nombre || "")}">
+      <label>Mail</label><input name="mail" type="email" inputmode="email" autocomplete="email" placeholder="nombre@gmail.com" value="${esc((pr.previo || {}).mail || fichaPrevia().mail || "")}">
+      <label>WhatsApp</label><input name="tel" inputmode="tel" autocomplete="tel" placeholder="299 …" value="${esc((pr.previo || {}).telefono || fichaPrevia().telefono || "")}">
       <label>¿Cómo nos conociste?</label><select name="como"><option value="">Elegí una opción</option><option>Instagram</option><option>Me lo recomendaron</option><option>Club Cipolletti</option><option>Pasé por el local</option><option>Otro</option></select>
       <p class="small muted" style="margin-top:10px">Te mandamos la confirmación a tu mail.</p>`});
   if (!box) return;
@@ -932,7 +941,7 @@ async function prElegir(f, h) {
       html: `<p>${esc(MSG_PRUEBA_USADA)}</p><p style="margin-top:12px"><a class="btn" style="width:100%" target="_blank" href="${waLink(WHATSAPP, "Hola! Quería reservar una clase de prueba pero mi mail ya figura registrado.")}">Escribir por WhatsApp</a></p>`});
     else toast(traducirError(e)); }
   if (ok) {
-    pr.listo = d; try { localStorage.setItem(PRUEBA_KEY, JSON.stringify(d)); } catch (e) {}
+    pr.listo = d; pr.previo = null; try { localStorage.setItem(PRUEBA_KEY, JSON.stringify(d)); } catch (e) {}
     enviarConfirmacion(d);
     renderPrueba();
   }
@@ -954,6 +963,9 @@ function arrancarPrueba() {
     try {
       state.cfg = await state.B.getConfig(); delete state.cfg._nuevo;
       state.bloqueos = await state.B.listBloqueos();
+      // Si su clase de prueba se canceló, vuelve a ver el calendario con sus datos ya cargados
+      const g = pruebaGuardada();
+      if (g && g.mail && !(await state.B.pruebaVigente(g.mail))) { try { localStorage.removeItem(PRUEBA_KEY); } catch (e) {} pr.previo = g; }
       const d = diasReservables();
       state.unsub = state.B.listenTurnos(d[0], d[d.length - 1], m => { state.turnos = m; if (!$modal.classList.contains("on")) renderPrueba(); });
       renderPrueba();
@@ -1247,6 +1259,7 @@ async function cargarAdmin() {
   if (state.rol === "admin") [state.profesList, state.mp, state.comps, state.difus, state.plantillas] = await Promise.all([
     state.B.listProfes(), state.B.listMp(), state.B.listComprobantes(), state.B.listDifusiones(), state.B.listPlantillas()]);
   if (state.rol === "admin") state.contratos = await state.B.listContratos();
+  if (state.rol === "admin" && state.B.mpLiberaciones) [state.mpLib, state.transf] = await Promise.all([state.B.mpLiberaciones(addDays(hoy(), -45)), state.B.getTransferidos()]);
 }
 const alumnoDe = email => state.alumnos.find(a => a.email === email);
 // Todas las reservas cargadas (día, semana, pruebas), sin repetir
@@ -1284,6 +1297,28 @@ function mostrarAnuncio(i) {
   rs.forEach((e, n) => e.classList.toggle("on", n === state.anIdx)); ds.forEach((e, n) => e.classList.toggle("on", n === state.anIdx));
 }
 setInterval(() => { if (document.querySelector(".rot") && !$modal.classList.contains("on")) mostrarAnuncio((state.anIdx || 0) + 1); }, 6000);
+// Plata de Mercado Pago: lo que ya se puede transferir y lo próximo que se libera
+function mpEstadoPlata(x) {
+  const pid = x.mpPago || (String(x.id).startsWith("mp_") ? x.id : ""), p = pid && (state.mpLib || []).find(q => q.id === pid);
+  if (!p || !p.liberacion) return "";
+  if ((state.transf || {})[p.id]) return `<div class="sub" style="color:#3ddc97">✓ Transferido</div>`;
+  return p.liberacion <= hoy() ? `<div class="sub" style="color:#3ddc97">✓ Disponible</div>` : `<div class="sub">Disponible el ${fmtDM(p.liberacion)}</div>`;
+}
+function mpPlataPend() {
+  const t = state.transf || {};
+  return (state.mpLib || []).filter(p => p.estado === "approved" && p.liberacion && !t[p.id]);
+}
+function avisoMpPlata() {
+  const xs = mpPlataPend(), h = hoy();
+  const disp = xs.filter(p => p.liberacion <= h), prox = xs.filter(p => p.liberacion > h).sort((a, b) => a.liberacion.localeCompare(b.liberacion));
+  if (!disp.length && !prox.length) return "";
+  const neto = p => Number(p.neto != null ? p.neto : p.monto) || 0, suma = a => a.reduce((t, p) => t + neto(p), 0);
+  const nom = p => esc((alumnoDe(p.email)?.nombre || p.email || "").split(" ")[0]);
+  const sig = prox.length ? prox.filter(p => p.liberacion === prox[0].liberacion) : [];
+  return `<div class="note acc row between" style="align-items:center;gap:10px;flex-wrap:wrap"><span>💰 ${disp.length
+    ? `<b>Mercado Pago: ${plata(suma(disp))} disponibles para transferir</b> (${disp.length === 1 ? "1 cobro" : disp.length + " cobros"}: ${disp.map(nom).join(", ")})`
+    : `Mercado Pago`}${sig.length ? `<br><span class="sub">Próximo: ${plata(suma(sig))} el ${fmtDM(sig[0].liberacion)} (${sig.map(nom).join(", ")})</span>` : ""}</span>${disp.length ? `<button class="btn sm" data-a="mpTransf">Ya los transferí</button>` : ""}</div>`;
+}
 function renderAdmin() {
   const esAdm = state.rol === "admin";
   if (!esAdm) state.tab = "agenda";
@@ -1294,6 +1329,7 @@ function renderAdmin() {
   const prevSem = document.querySelector(".semana"), prevScroll = prevSem && state._semLun === lunesDe(state.agFecha) ? prevSem.scrollLeft : null;
   $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
     ${!esAdm ? avisoHorarioDic() : `<div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${state.tab === k ? "sel" : ""}" data-a="tab" data-t="${k}">${l}</button>`).join("")}</div>`}
+    ${esAdm && state.tab !== "alumnos" ? avisoMpPlata() : ""}
     ${esAdm && state.tab !== "alumnos" && (state.comps || []).length ? `<div class="note acc row between" style="align-items:center;gap:10px"><span>🧾 <b>${state.comps.length === 1 ? "Hay 1 comprobante de pago" : "Hay " + state.comps.length + " comprobantes de pago"}</b> para revisar</span><button class="btn sm" data-a="tab" data-t="alumnos">Revisar</button></div>` : ""}
     ${body}
     ${!esAdm && state.miContrato?.firmadoEn ? `<p class="center small" style="margin:22px 0 8px"><button class="link" data-a="verContrato" data-e="${esc(state.user.email)}">Ver mi contrato firmado</button></p>` : ""}</div>`;
@@ -1437,8 +1473,9 @@ async function marcarAsistencia(id, v) {
 }
 async function quitarDelTurno(id) {
   const r = resPorId(id); if (!r) return;
-  if (await modal({title: "¿Quitar del turno?", html: `<p>${esc(nombreRes(r))} · ${fmtCorto(r.fecha)} ${r.hora}</p>`, ok: "Quitar", danger: true}))
-    if (await run(() => state.B.cancelar(r), "Turno quitado")) { await cargarAdmin(); renderAdmin(); }
+  const libera = esPrueba(r) && r.mail && r.asistencia !== true;
+  if (await modal({title: "¿Quitar del turno?", html: `<p>${esc(nombreRes(r))} · ${fmtCorto(r.fecha)} ${r.hora}</p>${libera ? `<p class="small muted" style="margin-top:8px">Es una clase de prueba: va a poder volver a reservar con el mismo link, sin completar la ficha de nuevo.</p>` : ""}`, ok: "Quitar", danger: true}))
+    if (await run(async () => { await state.B.cancelar(r); if (libera) await state.B.liberarPrueba(r.mail).catch(e => console.warn(e)); }, "Turno quitado")) { await cargarAdmin(); renderAdmin(); }
 }
 const CONCEPTOS = ["Pago 2 meses", "Pago 3 meses", "Otro"];
 async function registrarPago(id) {
@@ -1651,7 +1688,7 @@ function finLista(tipo, mes) {
         <td><div class="fn">${esc(x.nombre || "—")}</div>
           <div class="sub">${[!ing && x.categoria ? capi(x.categoria) : "", ing ? (x.dni ? "DNI " + esc(x.dni) : `<span style="color:#ffb020">Sin DNI</span>`) : "", `<span class="cm-m">${esc(capi(x.medio))}</span>`].filter(Boolean).join(" · ")}</div>
           ${x.notas ? `<div class="sub fnt">${esc(x.notas)}</div>` : ""}${auto(x)}</td>
-        <td class="cm">${esc(capi(x.medio))}</td><td class="r fm">${plata(Number(x.monto) || 0)}${ing && x.neto != null ? `<div class="sub">Neto ${plata(Number(x.neto))}</div>` : ""}</td>${ing ? `<td class="c"><button class="fac ${x.facturado ? "si" : "no"}" data-a="finFac" data-id="${esc(x.id)}" data-y="${y}" title="${x.facturado ? "Facturado · tocá para desmarcar" : "Sin facturar · tocá cuando lo factures"}" aria-label="${x.facturado ? "Facturado" : "Sin facturar"}">${x.facturado ? "✓" : "✗"}</button></td>` : ""}</tr>`).join("")}
+        <td class="cm">${esc(capi(x.medio))}</td><td class="r fm">${plata(Number(x.monto) || 0)}${ing && x.neto != null ? `<div class="sub">Neto ${plata(Number(x.neto))}</div>` : ""}${ing ? mpEstadoPlata(x) : ""}</td>${ing ? `<td class="c"><button class="fac ${x.facturado ? "si" : "no"}" data-a="finFac" data-id="${esc(x.id)}" data-y="${y}" title="${x.facturado ? "Facturado · tocá para desmarcar" : "Sin facturar · tocá cuando lo factures"}" aria-label="${x.facturado ? "Facturado" : "Sin facturar"}">${x.facturado ? "✓" : "✗"}</button></td>` : ""}</tr>`).join("")}
       </tbody></table></div>` : `<div class="card sub center">No hay ${ing ? "ingresos" : "gastos"} cargados en ${MESES_F[mm - 1].toLowerCase()}.</div>`}`;
 }
 
@@ -2381,6 +2418,13 @@ document.addEventListener("click", async e => {
     case "finVerMes": state.finMes = el.dataset.m; renderAdmin(); break;
     case "finNuevo": finEditar(null, el.dataset.t); break;
     case "finEdit": finEditar(el.dataset.id, null, el.dataset.y); break;
+    case "mpTransf": {
+      const disp = mpPlataPend().filter(p => p.liberacion <= hoy()); if (!disp.length) break;
+      const tot = disp.reduce((t, p) => t + (Number(p.neto != null ? p.neto : p.monto) || 0), 0);
+      if (!await modal({title: "¿Ya transferiste?", html: `<p>Se marcan como transferidos <b>${disp.length === 1 ? "1 cobro" : disp.length + " cobros"}</b> de Mercado Pago por <b>${plata(tot)}</b>. El aviso deja de aparecer.</p>`, ok: "Sí, ya transferí"})) break;
+      if (await run(() => state.B.marcarTransferidos(disp.map(p => p.id)), "Listo")) { disp.forEach(p => { state.transf = {...(state.transf || {}), [p.id]: Date.now()}; }); renderAdmin(); }
+      break;
+    }
     case "finFac": {
       const y = el.dataset.y, x = (finCache[y] || []).find(r => r.id === el.dataset.id); if (!x) break;
       const {id, ...resto} = x, nuevo = !x.facturado;
