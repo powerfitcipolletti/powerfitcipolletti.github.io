@@ -824,7 +824,15 @@ function header(sub) {
 const H = location.hash;
 const RUTA = (H === "#duenas" || H === "#panel") ? "duenas" : H === "#profes" ? "profes" : H === "#prueba" ? "prueba" : "alumnos";
 const BASE_URL = location.origin + location.pathname;
-const LINKS = {alumnos: BASE_URL, profes: BASE_URL + "#profes", duenas: BASE_URL + "#duenas", prueba: BASE_URL + "#prueba"};
+const LINKS = {alumnos: BASE_URL, profes: BASE_URL + "#profes", duenas: BASE_URL + "#duenas", prueba: BASE_URL + "#prueba",
+  fichaPrueba: BASE_URL.replace(/[^/]*$/, "") + "ficha.html", consentimiento: BASE_URL.replace(/[^/]*$/, "") + "ficha-alumnas.html"};
+// Todos los links para copiar o abrir (pestaña Links y Ajustes)
+const LINKS_LISTA = [["consentimiento","Ficha y consentimiento para alumnas (sin clase de prueba)"],["fichaPrueba","Clase de prueba: ficha + reserva (para la landing y redes)"],
+  ["prueba","Clase de prueba: solo reserva (para quien ya llenó la ficha)"],["alumnos","App de alumnos (reservar, cambiar y cancelar turnos)"],
+  ["profes","App de profes (agenda, asistencia y efectivo)"],["duenas","App de dueñas (esta)"]];
+const linksHTML = () => LINKS_LISTA.map(([k, l]) => `<label>${l}</label>
+  <div class="row"><input readonly value="${esc(LINKS[k])}" class="grow" style="width:auto;font-size:13px"><button class="btn sec sm" data-a="copiar" data-k="${k}">Copiar</button><a class="btn sec sm" style="text-decoration:none" target="_blank" rel="noopener" href="${esc(LINKS[k])}">Abrir</a></div>`).join("");
+const vLinks = () => `<div class="card"><b>Links</b><p class="sub">Tocá Copiar para pegarlo en WhatsApp o Instagram, o Abrir para verlo.</p>${linksHTML()}</div>`;
 const APP_NOMBRE = {alumnos: "Alumnos", profes: "Profes", duenas: "Dueñas", prueba: "Clase de prueba"}[RUTA];
 document.title = `PowerFit Cipolletti · ${APP_NOMBRE}`;
 
@@ -1335,9 +1343,9 @@ function avisoMpPlata() {
 function renderAdmin() {
   const esAdm = state.rol === "admin";
   if (!esAdm) state.tab = "agenda";
-  const tabs = [["agenda","Agenda"],["tablero","Tablero"],["finanzas","Finanzas"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos" + ((state.comps || []).length ? " (🧾" + state.comps.length + ")" : "")],["mails","Mails"],["bloqueos","Bloqueos"],["ajustes","Ajustes"]];
+  const tabs = [["agenda","Agenda"],["tablero","Tablero"],["finanzas","Finanzas"],["pruebas","Pruebas" + (state.pruebas.filter(r => r.inicio > Date.now()).length ? " (" + state.pruebas.filter(r => r.inicio > Date.now()).length + ")" : "")],["alumnos","Alumnos" + ((state.comps || []).length ? " (🧾" + state.comps.length + ")" : "")],["mails","Mails"],["bloqueos","Bloqueos"],["links","Links"],["ajustes","Ajustes"]];
   const semana = state.tab === "agenda" && state.vista !== "dia";
-  const body = {agenda: semana ? vAgendaSemana : vAgenda, tablero: vTablero, finanzas: vFinanzas, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, ajustes: vAjustes}[state.tab]();
+  const body = {agenda: semana ? vAgendaSemana : vAgenda, tablero: vTablero, finanzas: vFinanzas, pruebas: vPruebas, alumnos: vAlumnos, mails: vMails, bloqueos: vBloqueos, links: vLinks, ajustes: vAjustes}[state.tab]();
   document.body.classList.toggle("ancho", semana);
   const prevSem = document.querySelector(".semana"), prevScroll = prevSem && state._semLun === lunesDe(state.agFecha) ? prevSem.scrollLeft : null;
   $app.innerHTML = `${header((esAdm ? "Dueñas · " : "Profes · ") + state.user.email)}<div class="wrap">
@@ -2324,9 +2332,7 @@ function vAjustes() {
         return `<div class="person"><span class="name">${esc(p.nombre || "")} <span class="sub">${esc(p.email)}</span>${est ? `<br>${est}` : ""}</span><button class="x" data-a="delProfe" data-e="${esc(p.email)}">×</button></div>`; }).join("") || `<div class="empty">Todavía no hay profes cargadas</div>`}
       <div class="grid2" style="margin-top:6px"><div><label>Nombre</label><input id="pNom" placeholder="Juli"></div><div><label>Gmail</label><input id="pMail" type="email" placeholder="juli@gmail.com"></div></div>
       <button class="btn sec" style="width:100%;margin-top:10px" data-a="addProfe">+ Agregar profe</button></div>
-    <div class="card"><b>Links</b>
-      ${[["alumnos","App de alumnos (reservar, cambiar y cancelar turnos)"],["profes","App de profes (agenda, asistencia y efectivo)"],["duenas","App de dueñas (esta)"],["prueba","Clase de prueba (para la landing y redes, no es para alumnos)"]].map(([k, l]) => `<label>${l}</label>
-        <div class="row"><input readonly value="${esc(LINKS[k])}" class="grow" style="width:auto;font-size:13px"><button class="btn sec sm" data-a="copiar" data-k="${k}">Copiar</button></div>`).join("")}</div>`;
+    <div class="card"><b>Links</b>${linksHTML()}</div>`;
 }
 async function addProfe() {
   const nombre = document.getElementById("pNom").value.trim(), email = document.getElementById("pMail").value.trim().toLowerCase();
