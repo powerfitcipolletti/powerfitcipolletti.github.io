@@ -1180,12 +1180,13 @@ async function aprobarComprobante(id) {
   const c = (state.comps || []).find(x => x.id === id), a = c && alumnoDe(c.email);
   if (!a) return toast("No encuentro la alumna de este comprobante en Alumnos");
   const h = hoy(), meses0 = PAGOS.find(x => x.id === a.pago)?.meses || 1;
-  // sigue desde el vencimiento anterior, salvo que haga más de 10 días que se venció
-  const ini0 = a.vence && a.vence >= addDays(h, -10) ? a.vence : h;
+  // el plan arranca el día que pagó (fecha del comprobante), no desde el vencimiento anterior
+  const ini0 = c.fecha && c.fecha <= h ? c.fecha : h;
   const box = await modal({title: "Aprobar y renovar", ok: "Aprobar", html: `<p><b>${esc(a.nombre || a.email)}</b>${c.monto ? " · pagó " + plata(c.monto) : ""}</p>
     <div class="grid2"><div><label>Nuevo inicio</label><input type="date" name="i" value="${ini0}"></div>
     <div><label>Meses que paga</label><select name="m">${[1, 2, 3].map(n => `<option value="${n}" ${n === meses0 ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>
     <p class="sub" style="margin-top:10px">Vence: <b id="cVence"></b></p>
+    ${a.mpSuscripcion ? `<div class="note" style="margin-top:10px">⚠️ Esta alumna paga con débito automático de Mercado Pago: el plan se renueva solo con cada cobro. Si este comprobante es de ese mismo débito, no hace falta aprobarlo (rechazalo con el motivo "ya se acreditó por débito").</div>` : ""}
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" name="av" checked style="width:20px;height:20px"> Avisarle por mail que el pago está aprobado</label>`,
     onOpen: b => { const i = b.querySelector("[name=i]"), m = b.querySelector("[name=m]"), v = b.querySelector("#cVence");
       const calc = () => v.textContent = i.value ? fmtFecha(addMonths(i.value, Number(m.value))) : "—"; i.onchange = m.onchange = calc; calc(); }});
