@@ -450,6 +450,7 @@ function demoBackend() {
       S.reservas.push({...resto, id: nuevoIdRes(old, sid), slot: sid, fecha, hora, inicio: inicioMs(fecha, hora)}); notify();
     },
     async setAsistencia(r, v) { const x = S.reservas.find(y => y.id === r.id); if (x) { if (v == null) delete x.asistencia; else x.asistencia = v; } notify(); },
+    async editarPrueba(r, d) { const x = S.reservas.find(y => y.id === r.id); if (x) Object.assign(x, d); notify(); },
     async getAlumno(email) { const a = S.alumnos.find(a => a.email === email); return a ? clone(a) : null; },
     async listAlumnos() { return clone(S.alumnos); },
     async saveAlumno(a) { S.alumnos = S.alumnos.filter(x => x.email !== a.email); S.alumnos.push(clone(a)); notify(); },
@@ -693,6 +694,13 @@ async function firebaseBackend() {
       });
     },
     async setAsistencia(r, v) { await updateDoc(doc(db, "reservas", r.id), {asistencia: v == null ? deleteField() : v}); },
+    // Corrige nombre, mail o WhatsApp de una clase de prueba (y el teléfono de su ficha, si se puede)
+    async editarPrueba(r, d) {
+      await updateDoc(doc(db, "reservas", r.id), d);
+      const m = String(d.mail || "").trim().toLowerCase();
+      if (m && m !== String(r.mail || "").trim().toLowerCase()) await setDoc(doc(db, "pruebasMail", m), {creado: serverTimestamp()}, {merge: true}).catch(e => console.warn(e));
+      if (m) await updateDoc(doc(db, "fichas", m), {telefono: d.telefono}).catch(() => {});
+    },
     async getAlumno(email) { const s = await getDoc(doc(db, "alumnos", email)); return s.exists() ? s.data() : null; },
     async listAlumnos() { return (await getDocs(collection(db, "alumnos"))).docs.map(d => d.data()); },
     // merge: no borra los datos que agrega el programa de avisos (débito de Mercado Pago, avisos enviados)
@@ -1451,6 +1459,7 @@ async function accionesPersona(id) {
       ${mail ? bt("ficha", "📋 Ficha médica") : ""}
       ${bt("mover", "Mover turno")}
       ${adm && prueba && tel ? bt("wa", "WhatsApp") : ""}
+      ${adm && prueba ? bt("editarPr", "✏️ Corregir nombre, mail o WhatsApp") : ""}
       ${adm && prueba && !yaEsAlumno(r) ? bt("alta", "Dar de alta como alumna") : ""}
       ${adm ? bt("quitar", "Quitar del turno", "bad") : ""}`,
     onOpen: b => b.querySelectorAll("[data-act]").forEach(x => x.addEventListener("click", () => { act = x.dataset.act; }))});
@@ -1459,6 +1468,7 @@ async function accionesPersona(id) {
   if (act === "pago") return registrarPago(id);
   if (act === "mover") return agMover(id);
   if (act === "quitar") return quitarDelTurno(id);
+  if (act === "editarPr") return editarDatosPrueba(id);
   if (act === "wa") return window.open(waLink(tel, `Hola ${(r.nombre || "").split(" ")[0]}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`), "_blank");
   if (act === "alta") return editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota});
   if (act === "ficha") { const f = await fichaDe(mail); return modal({title: "Ficha de " + nombreRes(r), html: fichaHTML(f, mail), ok: "", cancel: "Cerrar"}); }
@@ -1468,6 +1478,24 @@ async function marcarAsistencia(id, v) {
   const nuevo = r.asistencia === v ? null : v;
   if (await run(() => state.B.setAsistencia(r, nuevo))) {
     [state.resDia, state.resSem, state.resMes, state.resRango].forEach(arr => (arr || []).forEach(x => { if (x.id === id) { if (nuevo == null) delete x.asistencia; else x.asistencia = nuevo; } }));
+    renderAdmin();
+  }
+}
+async function editarDatosPrueba(id) {
+  const r = resPorId(id); if (!r) return;
+  const box = await modal({title: "Datos de la clase de prueba", ok: "Guardar", cancel: "Volver",
+    html: `<p class="sub">${fmtLargo(r.fecha)} · ${r.hora} hs</p>
+      <label>Nombre y apellido</label><input name="nombre" value="${esc(r.nombre || "")}">
+      <label>Mail</label><input name="mail" type="email" value="${esc(r.mail || "")}">
+      <label>WhatsApp</label><input name="tel" inputmode="tel" value="${esc(r.telefono || "")}" placeholder="299 …">`});
+  if (!box) return;
+  const g = n => box.querySelector(`[name=${n}]`).value.trim();
+  const d = {nombre: g("nombre"), mail: g("mail").toLowerCase(), telefono: g("tel").replace(/[^\d+]/g, "")};
+  if (d.nombre.length < 2) return toast("Escribí el nombre");
+  if (d.mail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.mail)) return toast("Revisá el mail");
+  if (d.telefono.replace(/\D/g, "").length < 8) return toast("Revisá el número de WhatsApp");
+  if (await run(() => state.B.editarPrueba(r, d), "Datos corregidos")) {
+    [state.resDia, state.resSem, state.resMes, state.resRango].forEach(arr => (arr || []).forEach(x => { if (x.id === id) Object.assign(x, d); }));
     renderAdmin();
   }
 }
