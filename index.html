@@ -316,9 +316,10 @@ function cicloDe(a, f) {
   // hasta el vencimiento, aunque se lo hayan extendido (así un pack estirado no regala un cupo nuevo a mitad de camino)
   const mesesPago = PAGOS.find(x => x.id === a.pago)?.meses || 1;
   const ciclos = a.vence && a.vence >= a.inicio ? mesesPago : 0;
-  if (ciclos && a.vence >= f) n = Math.min(n, ciclos - 1);
+  // Después del vencimiento no arranca un ciclo nuevo: se sigue mostrando lo usado en el plan hasta que lo renueve
+  if (ciclos) n = Math.min(n, ciclos - 1);
   const desde = addDays(a.inicio, n * 30);
-  const hasta = ciclos && n === ciclos - 1 && a.vence >= f ? a.vence : addDays(desde, 29);
+  const hasta = ciclos && n === ciclos - 1 ? a.vence : addDays(desde, 29);
   return {desde, hasta};
 }
 const enCiclo = (rs, c) => rs.filter(r => r.fecha >= c.desde && r.fecha <= c.hasta).length;
