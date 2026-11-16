@@ -1532,21 +1532,25 @@ async function quitarDelTurno(id) {
   if (await modal({title: "¿Quitar del turno?", html: `<p>${esc(nombreRes(r))} · ${fmtCorto(r.fecha)} ${r.hora}</p>${libera ? `<p class="small muted" style="margin-top:8px">Es una clase de prueba: va a poder volver a reservar con el mismo link, sin completar la ficha de nuevo.</p>` : ""}`, ok: "Quitar", danger: true}))
     if (await run(async () => { await state.B.cancelar(r); if (libera) await state.B.liberarPrueba(r.mail).catch(e => console.warn(e)); }, "Turno quitado")) { await cargarAdmin(); renderAdmin(); }
 }
-const CONCEPTOS = ["Pago 2 meses", "Pago 3 meses", "Otro"];
+// Conceptos del pago en efectivo: un pack por cada plan (con su precio) y otros
+const CONCEPTOS = () => [...PLANES.map(p => `Pack ${p.nombre} (${p.cupoMes} clases)`), "Pago 2 meses", "Pago 3 meses", "Clase suelta", "Otro"];
 async function registrarPago(id) {
   const r = resPorId(id); if (!r) return;
   const p = r.pago || {};
   let quitar = false;
   const box = await modal({title: "Pago en efectivo", ok: "Guardar", cancel: "Volver",
     html: `<p><b>${esc(nombreRes(r))}</b> · ${fmtCorto(r.fecha)} ${r.hora}</p>
-      <label>Monto ($)</label><input name="monto" type="number" inputmode="numeric" min="0" value="${esc(p.monto ?? "")}" placeholder="Ej: 15000">
-      <label>Concepto</label><select name="concepto">${CONCEPTOS.map(c => `<option ${p.concepto === c ? "selected" : ""}>${c}</option>`).join("")}</select>
+      <label>Monto ($)</label><input name="monto" type="number" inputmode="numeric" min="0" value="${esc(p.monto ?? (esPrueba(r) ? "" : (PLANES.find(x => x.id === alumnoDe(r.email)?.plan) || {}).precio ?? ""))}" placeholder="Ej: 15000">
+      <label>Concepto</label><select name="concepto">${CONCEPTOS().map((c, i) => `<option value="${esc(c)}" data-plan="${PLANES[i]?.id || ""}" data-precio="${PLANES[i]?.precio || ""}" ${(r.pago ? p.concepto === c : PLANES[i] && PLANES[i].id === alumnoDe(r.email)?.plan) ? "selected" : ""}>${esc(c)}${PLANES[i] ? " · " + plata(PLANES[i].precio) : ""}</option>`).join("")}</select>
       <label>Nota (opcional)</label><input name="nota" value="${esc(p.nota || "")}">
       ${state.rol === "admin" && !esPrueba(r) && alumnoDe(r.email) && !r.pago ? `<label class="chk" style="margin-top:12px"><input type="checkbox" name="pack"> Es el pago de un pack nuevo: arranca con esta clase</label>
       <div id="packOp" style="display:none"><label>Plan</label><select name="plan">${PLANES.map(x => `<option value="${x.id}" ${(alumnoDe(r.email).plan || "2x") === x.id ? "selected" : ""}>${x.nombre} (${x.cupoMes} clases)</option>`).join("")}</select>
       <p class="small muted" style="margin-top:6px">El pack va del ${fmtDM(r.fecha)} al ${fmtDM(addMonths(r.fecha, 1))}. Esta clase cuenta como la 1.</p></div>` : ""}
       ${r.pago ? `<p class="small muted" style="margin-top:8px">Cargado por ${esc(nombreEquipo(p.por))}</p><button class="btn bad sm" style="margin-top:10px" data-quitar="1">Quitar pago</button>` : ""}`,
     onOpen: b => { const ck = b.querySelector("[name=pack]"); if (ck) ck.onchange = () => { b.querySelector("#packOp").style.display = ck.checked ? "" : "none"; };
+      // Al elegir un pack se completa el monto y, si corresponde, el plan del pack nuevo
+      const co = b.querySelector("[name=concepto]"), mo = b.querySelector("[name=monto]");
+      if (co) co.onchange = () => { const op = co.selectedOptions[0]; if (op?.dataset.precio) { mo.value = op.dataset.precio; const pl = b.querySelector("[name=plan]"); if (pl) pl.value = op.dataset.plan; } };
       const q = b.querySelector("[data-quitar]"); if (q) q.onclick = ev => { ev.preventDefault(); quitar = true; b.querySelector('[data-m="1"]').click(); }; }});
   if (!box) return;
   let v = null;
