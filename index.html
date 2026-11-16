@@ -869,6 +869,16 @@ function renderSinAcceso(msg, linkTxt, link) {
     <p style="margin:6px 0 14px">${msg}</p>
     ${link ? `<a class="btn" style="display:inline-block;text-decoration:none" href="${link}">${linkTxt}</a>` : ""}</div></div>`;
 }
+// Alumna sin ficha médica: no entra a la app hasta completarla (la marca se saca sola cuando llega la ficha)
+function renderFichaPendiente() {
+  $app.innerHTML = `${header(state.user.email)}<div class="wrap"><div class="card center">
+    <h2>Hola${state.alumno?.nombre ? ", " + esc(state.alumno.nombre.split(" ")[0]) : ""} 👋</h2>
+    <p class="muted" style="margin:8px 0 14px">Antes de reservar tus turnos necesitamos que completes tu <b>ficha médica y consentimiento</b>. Te lleva unos 5 minutos.</p>
+    <p class="small muted" style="margin-bottom:14px">Usá el mismo mail con el que entrás acá: <b>${esc(state.user.email)}</b></p>
+    <a class="btn" style="display:inline-block;text-decoration:none" href="${esc(LINKS.consentimiento)}">Completar mi ficha</a>
+    <p class="small muted" style="margin-top:16px">¿Ya la completaste? En unos minutos se habilita la app. <a href="#" onclick="location.reload();return false">Volver a intentar</a></p>
+  </div></div>`;
+}
 function renderNoAlta() {
   $app.innerHTML = `${header(state.user.email)}<div class="wrap"><div class="card center">
     <h2>Hola${state.user.nombre ? ", " + esc(state.user.nombre.split(" ")[0]) : ""} 👋</h2>
@@ -2678,6 +2688,7 @@ async function alEntrar(u) {
     if (!state.alumno && state.rol === "profe") return renderSinAcceso("Esta es la app de alumnos. Las profes tienen su propia app.", "Ir a la app de profes", LINKS.profes);
     state.admin = false;
     if (!state.alumno) return renderNoAlta();
+    if (state.alumno.fichaPendiente) return renderFichaPendiente();
     state.mis = await state.B.misReservas();
     state.comps = await state.B.misComprobantes().catch(e => { console.warn(e); return []; });
     state.diaSel = null;
