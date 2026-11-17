@@ -1453,7 +1453,7 @@ function personaFila(r) {
   const prueba = esPrueba(r), a = prueba ? null : alumnoDe(r.email), nom = nombreRes(r);
   const ini = nom.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase() || "?";
   let sub = "", sinPack = false;
-  if (prueba) sub = `<span class="badge prueba">PRUEBA</span>` + alertaPruebaRep(r);
+  if (prueba) { sub = `<span class="badge prueba">PRUEBA</span>` + alertaPruebaRep(r); if (r.nota) sub += ` · ${esc(r.nota)}`; }
   else if (a) { const cupo = cupoMes(a), c = cicloDe(a, r.fecha);
     const mias = (state.resRango || []).filter(x => x.email === r.email && x.fecha >= c.desde && x.fecha <= c.hasta).sort((x, y) => x.inicio - y.inicio);
     const n = mias.findIndex(x => x.id === r.id) + 1;
@@ -1488,7 +1488,7 @@ async function accionesPersona(id) {
       ${bt("mover", "Mover turno")}
       ${adm && prueba && tel ? bt("wa", "WhatsApp") : ""}
       ${adm && prueba ? bt("editarPr", "✏️ Corregir nombre, mail o WhatsApp") : ""}
-      ${adm && !prueba ? bt("nota", r.nota ? "📝 Comentario: " + esc(r.nota) : "📝 Agregar comentario") : ""}
+      ${adm ? bt("nota", r.nota ? "📝 Comentario: " + esc(r.nota) : "📝 Agregar comentario") : ""}
       ${adm && prueba && !yaEsAlumno(r) ? bt("alta", "Dar de alta como alumna") : ""}
       ${adm ? bt("quitar", "Quitar del turno", "bad") : ""}`,
     onOpen: b => b.querySelectorAll("[data-act]").forEach(x => x.addEventListener("click", () => { act = x.dataset.act; }))});
