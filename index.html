@@ -453,7 +453,7 @@ function demoBackend() {
     },
     async setAsistencia(r, v) { const x = S.reservas.find(y => y.id === r.id); if (x) { if (v == null) delete x.asistencia; else x.asistencia = v; } notify(); },
     async editarPrueba(r, d) { const x = S.reservas.find(y => y.id === r.id); if (x) Object.assign(x, d); notify(); },
-    async setNotaRes(id, nota) { const x = S.reservas.find(y => y.id === id); if (x) { if (nota) x.nota = nota; else delete x.nota; } notify(); },
+    async setNotaRes(id, nota, campo = "nota") { const x = S.reservas.find(y => y.id === id); if (x) { if (nota) x[campo] = nota; else delete x[campo]; } notify(); },
     async getAlumno(email) { const a = S.alumnos.find(a => a.email === email); return a ? clone(a) : null; },
     async listAlumnos() { return clone(S.alumnos); },
     async saveAlumno(a) { S.alumnos = S.alumnos.filter(x => x.email !== a.email); S.alumnos.push(clone(a)); notify(); },
@@ -631,7 +631,7 @@ async function firebaseBackend() {
         const e0 = V[clave] = {};
         e0.p = new Promise((ok, mal) => {
           let primero = true;
-          e0.u = onSnapshot(crearQuery(), s => { e0.d = s.docs.map(mapear); if (primero) { primero = false; ok(); } },
+          e0.u = onSnapshot(crearQuery(), s => { e0.d = s.docs.map(mapear); if (primero) { primero = false; ok(); } else setTimeout(() => window.dispatchEvent(new Event("pf-vivo")), 0); },
             e => { console.error(e); if (V[clave] === e0) delete V[clave]; if (primero) { primero = false; mal(e); } try { e0.u && e0.u(); } catch (x) {} });
         });
       }
@@ -698,7 +698,7 @@ async function firebaseBackend() {
     },
     async setAsistencia(r, v) { await updateDoc(doc(db, "reservas", r.id), {asistencia: v == null ? deleteField() : v}); },
     // Comentario del turno (ej. "abona en efectivo"), visible en la agenda de dueñas y profes
-    async setNotaRes(id, nota) { await updateDoc(doc(db, "reservas", id), {nota: nota ? nota : deleteField()}); },
+    async setNotaRes(id, nota, campo = "nota") { await updateDoc(doc(db, "reservas", id), {[campo]: nota ? nota : deleteField()}); },
     // Corrige nombre, mail o WhatsApp de una clase de prueba (y el teléfono de su ficha, si se puede)
     async editarPrueba(r, d) {
       await updateDoc(doc(db, "reservas", r.id), d);
@@ -719,10 +719,10 @@ async function firebaseBackend() {
       const s = await getDocs(query(collection(db, "comprobantes"), where("email", "==", me.email)));
       return s.docs.map(d => { const {img, creado, ...c} = d.data(); return {id: d.id, ...c}; });
     },
-    async listComprobantes() {
-      try { const s = await getDocs(query(collection(db, "comprobantes"), where("estado", "==", "pendiente")));
-        return s.docs.map(d => { const {creado, ...c} = d.data(); return {id: d.id, ...c}; }); }
-      catch (e) { console.warn(e); return []; }
+    // En vivo: un comprobante nuevo aparece solo en el panel, sin recargar
+    listComprobantes() {
+      return this.vivo("comps", () => query(collection(db, "comprobantes"), where("estado", "==", "pendiente")), d => { const {creado, ...c} = d.data(); return {id: d.id, ...c}; })
+        .catch(e => { console.warn(e); return []; });
     },
     async resolverComprobante(id, cambios) { await updateDoc(doc(db, "comprobantes", id), cambios); },
     // Mails masivos: la app los deja en "difusiones" y el programa de avisos los manda desde el Gmail del gimnasio
@@ -808,7 +808,10 @@ function traducirError(e) {
     "auth/weak-password": "La contraseña tiene que tener al menos 6 caracteres.", "auth/invalid-email": "Revisá el mail.", "auth/missing-password": "Escribí tu contraseña.",
     "auth/too-many-requests": "Demasiados intentos. Esperá unos minutos y probá de nuevo.", "auth/network-request-failed": "Sin conexión. Probá de nuevo en un momento."};
   if (AUTH[c]) return AUTH[c];
-  if (/permission|insufficient/i.test(m)) return "No se pudo guardar: no tenés permiso o el turno ya no está disponible.";
+  if (/permission|insufficient/i.test(m)) return RUTA === "alumnos" ? "No se pudo guardar: ese turno ya no está disponible o tu cuenta no tiene permiso. Recargá la app y probá de nuevo." : "No se pudo guardar porque la base de datos no lo permitió. Recargá la app y probá de nuevo; si sigue pasando, avisale a Flor.";
+  if (/resource-exhausted|quota/i.test(m + c)) return "Se alcanzó el límite de uso de la base de datos. Probá de nuevo en unos minutos y avisale a Flor.";
+  if (/not-found|No document to update/i.test(m + c)) return "No se encontró ese dato (puede que lo hayan borrado o cambiado). Recargá la app.";
+  if (/requires an index/i.test(m)) return "Falta configurar algo en la base de datos para esta búsqueda. Avisale a Flor.";
   if (/offline|network|unavailable/i.test(m)) return "Sin conexión. Probá de nuevo en un momento.";
   return m;
 }
@@ -838,7 +841,7 @@ document.title = `PowerFit Cipolletti · ${APP_NOMBRE}`;
 
 /* ============================ LOGIN ============================ */
 function renderLogin() {
-  const inApp = /Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent);
+  const inApp = esNavInterno();
   const textos = {
     alumnos: "Reservá, cambiá o cancelá tus turnos",
     profes: "App de profes · agenda del día, asistencia y pagos en efectivo",
@@ -856,7 +859,7 @@ function renderLogin() {
     ${state.B.demo ? demoBtn[RUTA] : `
       <button class="gbtn" data-a="login"><svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Ingresar con Google</button>
       ${formMail()}`}
-    ${inApp ? `<div class="note small">Si el ingreso no funciona, abrí este link en Chrome o Safari (menú ⋯ → “Abrir en el navegador”).</div>` : ""}
+    ${inApp ? `<div class="note small">Estás en el navegador de otra app (WhatsApp, Instagram o el mail), que no guarda tu sesión y te va a pedir la contraseña cada vez. ${pasosInstalar()}</div>` : RUTA === "alumnos" && !esInstalada() ? `<div class="note small">Tip: para no tener que ingresar cada vez, agregá la app a tu pantalla de inicio. ${pasosInstalar()}</div>` : ""}
     ${RUTA === "alumnos" ? ayudaWA("Hola! No puedo ingresar a la app de turnos de PowerFit.") : ""}
   </div>`;
 }
@@ -1075,6 +1078,7 @@ function pintarAlumno() {
       <div class="sub">${cupo ? `Te quedan <b style="color:var(--text)">${Math.max(0, cupo - usadasC)}</b> de ${cupo} turnos hasta el ${fmtDM(cicHoy.hasta)}` : ""}</div></div>${venceBadge}</div></div>
 
     ${cardComprobante()}
+    ${cardInstalar()}
     ${cardPush()}
 
     <h2>Mis próximos turnos</h2>
@@ -1095,6 +1099,20 @@ function pintarAlumno() {
 /* ---------- Notificaciones al celu ---------- */
 const esIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const esAppInstalada = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+// Si la app no está en la pantalla de inicio, los navegadores de otras apps (WhatsApp, Instagram, el mail) no guardan la sesión
+const esInstalada = () => !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+const esNavInterno = () => /Instagram|FBAN|FBAV|Line\/|GSA\/|WhatsApp|; wv\)/i.test(navigator.userAgent);
+const pasosInstalar = () => /iPhone|iPad|iPod/i.test(navigator.userAgent)
+  ? "Abrí <b>powerfitcipolletti.github.io</b> en <b>Safari</b>, tocá <b>Compartir</b> (el cuadrado con la flecha) → <b>Agregar a pantalla de inicio</b>, y entrá siempre desde ese ícono."
+  : "Abrí <b>powerfitcipolletti.github.io</b> en <b>Chrome</b>, tocá el menú <b>⋮</b> → <b>Agregar a la pantalla principal</b> (o Instalar app), y entrá siempre desde ese ícono.";
+function cardInstalar() {
+  if (esInstalada()) return "";
+  let oculto = false; try { oculto = localStorage.getItem("pf_instalar_ok") === "1"; } catch (e) {}
+  if (oculto && !esNavInterno()) return "";
+  return `<div class="card"><b>📲 Para no tener que ingresar cada vez</b>
+    <div class="sub" style="margin-top:6px">${esNavInterno() ? "Estás usando el navegador de otra app, que no guarda tu sesión. " : ""}${pasosInstalar()}</div>
+    <button class="link small" style="margin-top:8px" data-a="instalarOk">Ya lo hice · no mostrar más</button></div>`;
+}
 function cardPush() {
   const st = state.push;
   let oculto = false; try { oculto = localStorage.getItem("pf_push_no") === "1"; } catch (e) {}
@@ -1270,6 +1288,7 @@ async function clickSlot(f, h) {
 
 /* ============================ PANEL ADMIN ============================ */
 async function cargarAdmin() {
+  state._diaPanel = hoy();
   const ym = state.agFecha.slice(0, 7);
   const lun = lunesDe(state.agFecha);
   const B = state.B, rD = addDays(hoy(), -45), rH = addDays(hoy(), 60);
@@ -1294,6 +1313,27 @@ async function cargarAdmin() {
   if (state.rol === "admin") state.contratos = await state.B.listContratos();
   if (state.rol === "admin" && state.B.mpLiberaciones) [state.mpLib, state.transf] = await Promise.all([state.B.mpLiberaciones(addDays(hoy(), -45)), state.B.getTransferidos()]);
 }
+// El panel se actualiza solo: cuando llega un cambio (reserva, cancelación, comprobante) o cuando se vuelve a la pestaña.
+// No interrumpe si hay una ventana abierta o se está escribiendo; si cambió el día, la agenda pasa a hoy.
+let _autoT = null, _ocultoDesde = 0;
+const panelVisible = () => !!state.user && (state.rol === "admin" || state.rol === "profe") && (RUTA === "duenas" || RUTA === "profes");
+function refrescarPanel() {
+  clearTimeout(_autoT);
+  _autoT = setTimeout(async () => {
+    if (!panelVisible() || document.hidden) return;
+    const ae = document.activeElement;
+    if ($modal.classList.contains("on") || (ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName))) return refrescarPanel();
+    const y = window.scrollY;
+    try { await cargarAdmin(); renderAdmin(); window.scrollTo(0, y); } catch (e) { console.warn(e); }
+  }, 1500);
+}
+window.addEventListener("pf-vivo", refrescarPanel);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { _ocultoDesde = Date.now(); return; }
+  if (!panelVisible()) return;
+  if (state._diaPanel && state._diaPanel !== hoy() && state.agFecha === state._diaPanel) state.agFecha = hoy();
+  if (Date.now() - _ocultoDesde > 60e3 || state._diaPanel !== hoy()) refrescarPanel();
+});
 const alumnoDe = email => state.alumnos.find(a => a.email === email);
 // Todas las reservas cargadas (día, semana, pruebas), sin repetir
 const resPool = () => { const m = new Map(); [...(state.resDia || []), ...(state.resSem || []), ...(state.pruebas || [])].forEach(r => m.set(r.id, r)); return [...m.values()]; };
@@ -1453,7 +1493,7 @@ function personaFila(r) {
   const prueba = esPrueba(r), a = prueba ? null : alumnoDe(r.email), nom = nombreRes(r);
   const ini = nom.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase() || "?";
   let sub = "", sinPack = false;
-  if (prueba) { sub = `<span class="badge prueba">PRUEBA</span>` + alertaPruebaRep(r); if (r.nota) sub += ` · ${esc(r.nota)}`; }
+  if (prueba) { sub = `<span class="badge prueba">PRUEBA</span>` + alertaPruebaRep(r); if (r.comentario) sub += ` · ${esc(r.comentario)}`; }
   else if (a) { const cupo = cupoMes(a), c = cicloDe(a, r.fecha);
     const mias = (state.resRango || []).filter(x => x.email === r.email && x.fecha >= c.desde && x.fecha <= c.hasta).sort((x, y) => x.inicio - y.inicio);
     const n = mias.findIndex(x => x.id === r.id) + 1;
@@ -1488,7 +1528,7 @@ async function accionesPersona(id) {
       ${bt("mover", "Mover turno")}
       ${adm && prueba && tel ? bt("wa", "WhatsApp") : ""}
       ${adm && prueba ? bt("editarPr", "✏️ Corregir nombre, mail o WhatsApp") : ""}
-      ${adm ? bt("nota", r.nota ? "📝 Comentario: " + esc(r.nota) : "📝 Agregar comentario") : ""}
+      ${adm ? bt("nota", r[prueba ? "comentario" : "nota"] ? "📝 Comentario: " + esc(r[prueba ? "comentario" : "nota"]) : "📝 Agregar comentario") : ""}
       ${adm && prueba && !yaEsAlumno(r) ? bt("alta", "Dar de alta como alumna") : ""}
       ${adm ? bt("quitar", "Quitar del turno", "bad") : ""}`,
     onOpen: b => b.querySelectorAll("[data-act]").forEach(x => x.addEventListener("click", () => { act = x.dataset.act; }))});
@@ -1499,17 +1539,17 @@ async function accionesPersona(id) {
   if (act === "quitar") return quitarDelTurno(id);
   if (act === "editarPr") return editarDatosPrueba(id);
   if (act === "nota") {
-    const nom0 = nombreRes(r);
-    const b2 = await modal({title: "Comentario del turno", ok: "Guardar", cancel: "Volver", html: `<p class="sub">${esc(nom0)} · ${fmtCorto(r.fecha)} ${r.hora}</p><input name="nota" value="${esc(r.nota || "")}" placeholder="Ej: abona en efectivo">`});
+    const nom0 = nombreRes(r), campo = prueba ? "comentario" : "nota";
+    const b2 = await modal({title: "Comentario del turno", ok: "Guardar", cancel: "Volver", html: `<p class="sub">${esc(nom0)} · ${fmtCorto(r.fecha)} ${r.hora}</p>${prueba && r.nota ? `<p class="small muted">${esc(r.nota)}</p>` : ""}<input name="nota" value="${esc(r[campo] || "")}" placeholder="${prueba ? "Ej: viene con una amiga" : "Ej: abona en efectivo"}">`});
     if (!b2) return;
     const nota = b2.querySelector("[name=nota]").value.trim();
-    if (await run(() => state.B.setNotaRes(r.id, nota), "Comentario guardado")) {
-      [state.resDia, state.resSem, state.resMes, state.resRango].forEach(arr => (arr || []).forEach(x => { if (x.id === r.id) { if (nota) x.nota = nota; else delete x.nota; } }));
+    if (await run(() => state.B.setNotaRes(r.id, nota, campo), "Comentario guardado")) {
+      [state.resDia, state.resSem, state.resMes, state.resRango, state.pruebas].forEach(arr => (arr || []).forEach(x => { if (x.id === r.id) { if (nota) x[campo] = nota; else delete x[campo]; } }));
       renderAdmin(); }
     return;
   }
   if (act === "wa") return window.open(waLink(tel, `Hola ${(r.nombre || "").split(" ")[0]}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`), "_blank");
-  if (act === "alta") return editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota});
+  if (act === "alta") return editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: [r.nota, r.comentario].filter(Boolean).join(" · ")});
   if (act === "ficha") { const f = await fichaDe(mail); return modal({title: "Ficha de " + nombreRes(r), html: fichaHTML(f, mail), ok: "", cancel: "Cerrar"}); }
 }
 async function marcarAsistencia(id, v) {
@@ -2478,7 +2518,8 @@ document.addEventListener("click", async e => {
     case "prDia": pr.dia = el.dataset.f; renderPrueba(); break;
     case "prSlot": prElegir(el.dataset.f, el.dataset.h); break;
     case "prOtra": pr.listo = null; try { localStorage.removeItem(PRUEBA_KEY); } catch (e) {} renderPrueba(); break;
-    case "alta": { const r = resPorId(el.dataset.id); if (r) editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.nota}); break; }
+    case "instalarOk": try { localStorage.setItem("pf_instalar_ok", "1"); } catch (e) {} renderAlumno(); break;
+    case "alta": { const r = resPorId(el.dataset.id); if (r) editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: [r.nota, r.comentario].filter(Boolean).join(" · ")}); break; }
     case "dia": state.diaSel = el.dataset.f; renderAlumno(); break;
     case "semAl": state.semAl = addDays(state.semAl || lunesDe(hoy()), Number(el.dataset.d)); state.turnos = {}; suscribirTurnos(); renderAlumno(); break;
     case "slot": clickSlot(el.dataset.f, el.dataset.h); break;
