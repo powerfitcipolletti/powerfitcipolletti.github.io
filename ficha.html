@@ -359,7 +359,7 @@ function firmaPNG() { // recorta el espacio vacío y la achica para que pese poc
 }
 
 /* ============================ enviar ============================ */
-const apto = () => D.condiciones.length > 0 && D.condiciones.every(c => SIN.test(c)) && SIN.test(D.medicacion);
+const apto = () => D.condiciones.length > 0 && D.condiciones.every(c => SIN.test(c)); // la medicación queda registrada pero ya no frena la reserva
 function armarDatos() {
   const t = hoy();
   return {
