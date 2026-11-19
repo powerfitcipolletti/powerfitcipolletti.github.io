@@ -1381,7 +1381,8 @@ const nombreDe = email => alumnoDe(email)?.nombre || email;
 const nombreRes = r => esPrueba(r) ? (r.nombre || "Clase de prueba") : nombreDe(r.email);
 const telRes = r => esPrueba(r) ? r.telefono : alumnoDe(r.email)?.telefono;
 const digitos = t => String(t || "").replace(/\D/g, "").slice(-8);
-const yaEsAlumno = r => r.telefono && state.alumnos.some(a => digitos(a.telefono) && digitos(a.telefono) === digitos(r.telefono));
+// Es alumno solo si tiene (o tuvo) un plan cargado: a quien reserva la prueba se le crea una ficha sin plan, y eso no cuenta
+const yaEsAlumno = r => state.alumnos.some(a => (a.plan || a.activo) && ((r.telefono && digitos(a.telefono) && digitos(a.telefono) === digitos(r.telefono)) || (r.mail && a.email && a.email.toLowerCase() === r.mail.toLowerCase())));
 // Aviso del horario nuevo de diciembre (se muestra a alumnas y profes hasta el 30/11 y después desaparece solo)
 const avisoHorarioDic = () => hoy() < "2026-12-01" ? `<div class="note acc"><b>📅 Desde el 1 de diciembre cambian los horarios</b>
   <div style="margin-top:4px">Lunes a jueves: de 8 a 11 y de 16 a 20:30<br>Viernes: de 8 a 10 y de 16 a 19</div></div>` : "";
