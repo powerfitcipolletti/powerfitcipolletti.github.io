@@ -954,6 +954,18 @@ function renderPrueba() {
 }
 // Datos de la ficha recién firmada en ficha.html (mismo navegador): se precargan en la reserva
 function fichaPrevia() { try { const x = JSON.parse(localStorage.getItem("pf_ficha")); return x && Date.now() - x.t < 30 * 864e5 ? x : {}; } catch (e) { return {}; } }
+// Programa de fichas (Apps Script): dice si la persona ya firmó la ficha (por mail o por teléfono)
+// y si ya hizo una clase de prueba con otro mail (mismo teléfono)
+const FICHA_URL = "https://script.google.com/macros/s/AKfycbzZUqSOkPcbvpabvY3XV3XWYXL38chKQ3pyH_3dTtyO85sSnKfbtKn6mOTS-E0aXC6b/exec";
+async function chequearFicha(mail, tel) {
+  try {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
+    const r = await fetch(FICHA_URL + "?check=" + encodeURIComponent(mail) + "&tel=" + encodeURIComponent(tel), {signal: ctl.signal});
+    clearTimeout(to);
+    const j = await r.json();
+    return j && j.ok ? j : null;
+  } catch (e) { console.warn(e); return null; } // si no responde, no se frena la reserva
+}
 async function prElegir(f, h) {
   const box = await modal({title: "Tus datos", ok: "Reservar clase", cancel: "Volver",
     html: `<p class="sub">${fmtLargo(f)} · ${h} hs</p>
@@ -968,6 +980,26 @@ async function prElegir(f, h) {
   if (d.nombre.length < 2) return toast("Escribí tu nombre");
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.mail)) return toast("Revisá tu mail");
   if (d.telefono.replace(/\D/g, "").length < 8) return toast("Revisá el número de WhatsApp");
+  // Antes de reservar: una sola clase de prueba por persona (mismo teléfono) y la ficha firmada
+  if (!pr.previo && !state.B?.demo) {
+    toast("Un momento…");
+    const chk = await chequearFicha(d.mail, d.telefono);
+    if (chk && chk.pruebaPrevia) {
+      modal({title: "Ya hiciste tu clase de prueba", cancel: "", ok: "Entendido",
+        html: `<p>Con este número de WhatsApp ya hay una clase de prueba registrada${chk.pruebaPrevia.fecha ? " (" + esc(fmtLargo(chk.pruebaPrevia.fecha)) + ")" : ""}. La clase de prueba es una sola por persona.</p>
+          <p style="margin-top:8px">Si querés seguir entrenando con nosotras, escribinos por WhatsApp y te contamos los planes.</p>
+          <p style="margin-top:12px"><a class="btn" style="width:100%" target="_blank" href="${waLink(WHATSAPP, "Hola! Quería reservar una clase de prueba y me dice que ya hice una.")}">Escribir por WhatsApp</a></p>`});
+      return;
+    }
+    if (chk && chk.existe === false) {
+      const ir = await modal({title: "Primero, tu ficha", ok: "Completar mi ficha", cancel: "Volver",
+        html: `<p>Antes de reservar necesitamos que completes tu <b>ficha y consentimiento</b>. Te lleva unos 5 minutos.</p>
+          <p class="small muted" style="margin-top:8px">Cuando la firmes, vas a poder elegir tu horario.</p>`});
+      if (ir) location.href = LINKS.fichaPrueba;
+      return;
+    }
+    if (chk && chk.porTelefono) d.nota = (d.nota ? d.nota + " · " : "") + "⚠ Tenía la ficha firmada con otro mail (ya vinculada)";
+  }
   let ok = true;
   try { await state.B.reservarPrueba(d, state.cfg.capacidad); }
   catch (e) { ok = false; console.error(e);
