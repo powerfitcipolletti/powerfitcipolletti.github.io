@@ -488,7 +488,7 @@ function demoBackend() {
     async setFin(id, d) { const {id: _, ...x} = d; if (!S.fin) S.fin = finDemo(); S.fin = S.fin.filter(r => r.id !== id); S.fin.push({...clone(x), id}); notify(); },
     async delFin(id) { S.fin = (S.fin || []).filter(r => r.id !== id); notify(); },
     async pagosDesde(f) { return []; },
-    async mpLiberaciones() { return []; }, async liberarPrueba() {}, async pruebaVigente() { return true; }, async getTransferidos() { return {}; }, async marcarTransferidos() {},
+    async mpLiberaciones() { return []; }, async liberarPrueba() {}, async bloquearPrueba() {}, async pruebaVigente() { return true; }, async getTransferidos() { return {}; }, async marcarTransferidos() {},
     async listFinTodo() { if (!S.fin) S.fin = finDemo(); return clone(S.fin); },
     async getFicha(email) { return email === "carla.demo@gmail.com" ? {fecha: "10/10/2026", nombre: "Carla Ruiz", dni: "30111222", edad: "42", nacimiento: "02/03/1984", telefono: "2995553333", altura: "165", peso: "68", actividad: "No", objetivo: "Tonificar y bajar de peso", condiciones: "Hipertensión", detalle: "Controlada con medicación", medicacion: "Sí", cualMedicacion: "Enalapril", lesion: "No", otra: "", imagen: "Sí", consentimiento: "Sí", firma: "Carla Ruiz", hora: "18:42", firmaImg: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABkAQMAAAAGz5+DAAAABlBMVEX///8LGjovth/2AAACe0lEQVR42u2WsW7UQBCGv7VPZ1fxlVdEstNRUh5SkrsCUfMI4Q1SpkBikaKkocgr8CCgTaBIg5RHWEVIUC4oxQK+M4Xt3fU5FyxEQXFT2eN///1ndmbWsLWtbW1r/7El9/iiv2aL5b9kEwoQf2I7BGAsH4aJy6oYoK1xpIt7vIeB51peABR9WHbplYzUAmBn0odNOPaeEoBf96RgjvVHJfQMmJ302d5xtn6idtSDiZK3XlzFZ2Ch+mxfMS7+HS4AzG0PFmnuApf6DkjRg41gVfhAUwBt5DpsqsClqUA8AYEFRKXXDttl5Jj8CwgZK0gqG7CtgNMWJmECERQwYxywnYSnasgqSYzQiJIsUGiBvK0jTfZKkoAh1sTGV5gBt0xoolwxBkuiakG1tsgAtslvpFkZSOGUqYI9H4IGyqC+bMEKFIWEJn0RjBSOHBSUMIFbDgB75GpC1hG6AhGWKeRYCGJIXLjADsBLZpDVCNtumrRprQu5XWTf3ODyHrWyPgZz4YoF8FwBfGg33fXNlev9uuiPIK6XZ936zAHmVQmQSw2i7p1Ed2CZBMq5BciVcuKF6XS9Bbi7uQYwe37YVGkHVi4A860+s6nyX867M6QA0eiwY2C3acGLTrULC6LxJHNg/h4fg2OrToOXGwkHL+rnn7udUPchbqfvuULYzPV3qO0W3EBICyJrGwmFWstv2yDikyVRSTCLPZuRdSMDZM84Ue3sqjqhJrquIgCbVdWG2VtOPIw7fmyALdOgc5cy3TTJzwgy9Hrj7TJnNuyCfLzxW7BpKRdDYIRj/wGYYBAsGgRbPdWD2B6pQbdyNez2Xj3wmxA8L6+2P2FbW7ff1yWxn8fiRjwAAAAASUVORK5CYII="} : null; }
   };
@@ -597,9 +597,13 @@ async function firebaseBackend() {
     async pruebaVigente(mail) { try { return (await getDoc(doc(db, "pruebasMail", String(mail).trim().toLowerCase()))).exists(); } catch (e) { return true; } },
     // Registra los mails que ya tuvieron clase de prueba (para las cargadas antes de este control)
     async marcarPruebasUsadas(lista) {
-      const mails = [...new Set(lista.map(r => String(r.mail || "").trim().toLowerCase()).filter(m => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)))];
-      await Promise.all(mails.map(m => setDoc(doc(db, "pruebasMail", m), {creado: serverTimestamp()}, {merge: true})));
+      // Un mail cuenta como "prueba usada" salvo que todas sus pruebas estén marcadas ausente (no la pudo hacer: puede volver a reservar)
+      const ok = m => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m), por = {};
+      lista.forEach(r => { const m = String(r.mail || "").trim().toLowerCase(); if (ok(m)) (por[m] = por[m] || []).push(r); });
+      await Promise.all(Object.entries(por).map(([m, rs]) => rs.every(r => r.asistencia === false)
+        ? deleteDoc(doc(db, "pruebasMail", m)) : setDoc(doc(db, "pruebasMail", m), {creado: serverTimestamp()}, {merge: true})));
     },
+    async bloquearPrueba(mail) { const m = String(mail || "").trim().toLowerCase(); if (m) await setDoc(doc(db, "pruebasMail", m), {creado: serverTimestamp()}, {merge: true}); },
     // Solo las dueñas pueden leer la lista de profes: si la lectura funciona, es dueña
     async isAdmin() { try { await getDocs(query(collection(db, "profes"), limit(1))); return true; } catch (e) { return false; } },
     async isProfe() { try { return (await getDoc(doc(db, "profes", me.email))).exists(); } catch (e) { return false; } },
@@ -1604,7 +1608,12 @@ async function marcarAsistencia(id, v) {
   const r = resPorId(id); if (!r) return;
   const nuevo = r.asistencia === v ? null : v;
   if (await run(() => state.B.setAsistencia(r, nuevo))) {
-    [state.resDia, state.resSem, state.resMes, state.resRango].forEach(arr => (arr || []).forEach(x => { if (x.id === id) { if (nuevo == null) delete x.asistencia; else x.asistencia = nuevo; } }));
+    [state.resDia, state.resSem, state.resMes, state.resRango, state.pruebas, state.pruebasTodas].forEach(arr => (arr || []).forEach(x => { if (x.id === id) { if (nuevo == null) delete x.asistencia; else x.asistencia = nuevo; } }));
+    // Clase de prueba con ausente: no la pudo hacer, así que puede volver a reservar (aunque ya tenga ficha)
+    if (esPrueba(r) && r.mail) {
+      try { if (nuevo === false) await state.B.liberarPrueba(r.mail); else await state.B.bloquearPrueba(r.mail); } catch (e) { console.warn(e); }
+      if (nuevo === false) toast("Ausente: puede volver a reservar su clase de prueba");
+    }
     renderAdmin();
   }
 }
@@ -2514,7 +2523,7 @@ function alertaPruebaRep(r) {
     const px = x.split(" "), py = y.split(" "); return px.length > 1 && py.length > 1 && px[0] === py[0] && px[px.length - 1] === py[py.length - 1]; };
   const t = tel(r.telefono), m = String(r.mail || "").toLowerCase();
   const igual = x => (t.length === 8 && tel(x.telefono) === t) || (m && String(x.mail || x.email || "").toLowerCase() === m) || mismo(x.nombre, r.nombre);
-  const antes = state.pruebasTodas.filter(x => x.id !== r.id && (x.inicio || 0) < (r.inicio || 0) && igual(x)).sort((a, b) => b.inicio - a.inicio);
+  const antes = state.pruebasTodas.filter(x => x.id !== r.id && x.asistencia !== false && (x.inicio || 0) < (r.inicio || 0) && igual(x)).sort((a, b) => b.inicio - a.inicio);
   // "ya es alumna" solo para pruebas que todavía no pasaron (las viejas pueden ser justamente la que se dio de alta)
   const alu = (r.inicio || 0) > Date.now() - 3 * 36e5 ? state.alumnos.find(a => igual({telefono: a.telefono, mail: a.email, nombre: a.nombre})) : null;
   const out = [];
