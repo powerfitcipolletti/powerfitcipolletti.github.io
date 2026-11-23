@@ -2523,11 +2523,14 @@ function alertaPruebaRep(r) {
     const px = x.split(" "), py = y.split(" "); return px.length > 1 && py.length > 1 && px[0] === py[0] && px[px.length - 1] === py[py.length - 1]; };
   const t = tel(r.telefono), m = String(r.mail || "").toLowerCase();
   const igual = x => (t.length === 8 && tel(x.telefono) === t) || (m && String(x.mail || x.email || "").toLowerCase() === m) || mismo(x.nombre, r.nombre);
-  const antes = state.pruebasTodas.filter(x => x.id !== r.id && x.asistencia !== false && (x.inicio || 0) < (r.inicio || 0) && igual(x)).sort((a, b) => b.inicio - a.inicio);
+  // pruebas anteriores de la misma persona: si vino (presente) es una prueba repetida; si no vino o no se marcó, es una reagendada
+  const previas = state.pruebasTodas.filter(x => x.id !== r.id && (x.inicio || 0) < (r.inicio || 0) && igual(x)).sort((a, b) => b.inicio - a.inicio);
+  const antes = previas.filter(x => x.asistencia === true), reag = previas.filter(x => x.asistencia !== true);
   // "ya es alumna" solo para pruebas que todavía no pasaron (las viejas pueden ser justamente la que se dio de alta)
   const alu = (r.inicio || 0) > Date.now() - 3 * 36e5 ? state.alumnos.find(a => igual({telefono: a.telefono, mail: a.email, nombre: a.nombre})) : null;
   const out = [];
   if (antes.length) out.push(`<span class="badge bad" title="${esc(antes.map(x => fmtFecha(x.fecha) + " · " + (x.nombre || "") + " · " + (x.mail || "")).join(" | "))}">⚠️ Ya hizo prueba el ${fmtDM(antes[0].fecha)}</span>`);
+  else if (reag.length) out.push(`<span class="badge warn" title="${esc(reag.map(x => fmtFecha(x.fecha) + " · " + (x.nombre || "") + " · " + (x.mail || "")).join(" | "))}">🔁 Reagendada (era el ${fmtDM(reag[0].fecha)})</span>`);
   if (alu) out.push(`<span class="badge bad" title="${esc(alu.nombre + " · " + alu.email)}">⚠️ Ya es alumna${alu.nombre && !mismo(alu.nombre, r.nombre) ? ": " + esc(alu.nombre) : ""}</span>`);
   return out.length ? " " + out.join(" ") : "";
 }
