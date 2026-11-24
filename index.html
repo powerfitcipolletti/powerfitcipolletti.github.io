@@ -431,6 +431,9 @@ function demoBackend() {
     async saveProfe(p) { S.profes = (S.profes || []).filter(x => x.email !== p.email); S.profes.push(clone(p)); notify(); },
     async deleteProfe(email) { S.profes = (S.profes || []).filter(x => x.email !== email); notify(); },
     async getContrato() { return null; }, async firmarContrato() {}, async listContratos() { return []; },
+    async listAnot(email) { return clone((S.anot || []).filter(x => x.alumno === email)); },
+    async addAnot(d) { (S.anot = S.anot || []).push({...d, autor: me.email, id: Math.random().toString(36).slice(2, 10), ts: Date.now()}); notify(); },
+    async delAnot(id) { S.anot = (S.anot || []).filter(x => x.id !== id); notify(); },
     async setPago(r, v) { const x = S.reservas.find(y => y.id === r.id); if (x) { if (v == null) delete x.pago; else x.pago = clone(v); } notify(); },
     async getConfig() { return clone(S.config); },
     async saveConfig(c) { S.config = clone(c); notify(); },
@@ -735,6 +738,11 @@ async function firebaseBackend() {
     async setAsistencia(r, v) { await updateDoc(doc(db, "reservas", r.id), {asistencia: v == null ? deleteField() : v}); },
     // Comentario del turno (ej. "abona en efectivo"), visible en la agenda de dueñas y profes
     async setNotaRes(id, nota, campo = "nota") { await updateDoc(doc(db, "reservas", id), {[campo]: nota ? nota : deleteField()}); },
+    // Anotaciones de las profes y dueñas sobre cada alumna (colección "anotaciones"; las alumnas no las ven)
+    async listAnot(email) { const s = await getDocs(query(collection(db, "anotaciones"), where("alumno", "==", email)));
+      return s.docs.map(d => { const x = d.data(); return {...x, id: d.id, ts: x.ts?.toMillis?.() || 0}; }); },
+    async addAnot(d) { await F.addDoc(collection(db, "anotaciones"), {...d, autor: me.email, ts: serverTimestamp()}); },
+    async delAnot(id) { await deleteDoc(doc(db, "anotaciones", id)); },
     // Corrige nombre, mail o WhatsApp de una clase de prueba (y el teléfono de su ficha, si se puede)
     async editarPrueba(r, d) {
       await updateDoc(doc(db, "reservas", r.id), d);
@@ -1602,6 +1610,7 @@ async function accionesPersona(id) {
       <div class="grid2">${bt("si", r.asistencia === true ? "✅ Presente" : "Presente", r.asistencia === true ? "" : "sec")}${bt("no", r.asistencia === false ? "❌ Ausente" : "Ausente", r.asistencia === false ? "bad" : "sec")}</div>
       ${bt("pago", r.pago ? "💵 Efectivo: " + plata(r.pago.monto) : "💵 Registrar efectivo")}
       ${mail ? bt("ficha", "📋 Ficha médica") : ""}
+      ${mail ? bt("anot", "🗒 Anotaciones") : ""}
       ${bt("mover", "Mover turno")}
       ${adm && prueba && tel ? bt("wa", "WhatsApp") : ""}
       ${adm && prueba ? bt("editarPr", "✏️ Corregir nombre, mail o WhatsApp") : ""}
@@ -1613,6 +1622,7 @@ async function accionesPersona(id) {
   if (act === "si" || act === "no") return marcarAsistencia(id, act === "si");
   if (act === "pago") return registrarPago(id);
   if (act === "mover") return agMover(id);
+  if (act === "anot") return anotaciones(mail, nombreRes(r));
   if (act === "quitar") return quitarDelTurno(id);
   if (act === "editarPr") return editarDatosPrueba(id);
   if (act === "nota") {
@@ -1628,6 +1638,34 @@ async function accionesPersona(id) {
   if (act === "wa") return window.open(waLink(tel, `Hola ${(r.nombre || "").split(" ")[0]}! Te escribimos de PowerFit por tu clase de prueba del ${fmtLargo(r.fecha)} a las ${r.hora}.`), "_blank");
   if (act === "alta") return editarAlumno(null, {nombre: r.nombre, email: r.mail || "", telefono: r.telefono, notas: r.comentario || ""});
   if (act === "ficha") { const f = await fichaDe(mail); return modal({title: "Ficha de " + nombreRes(r), html: fichaHTML(f, mail), ok: "", cancel: "Cerrar"}); }
+}
+const miNombreEquipo = () => { const e = state.user?.email || "", n = nombreEquipo(e); return n !== e ? n : (state.miContrato?.nombre || state.user?.nombre || e); };
+const quienAnot = x => { const n = nombreEquipo(x.autor); return n && n !== x.autor ? n : (x.autorNombre || x.autor || ""); };
+// Anotaciones por alumna: las cargan las profes y las dueñas, con fecha y quién la escribió. Las alumnas no las ven.
+async function anotaciones(email, nombre) {
+  email = String(email || "").trim().toLowerCase(); if (!email) return;
+  let lista;
+  try { lista = (await state.B.listAnot(email)).sort((a, b) => (b.ts || 0) - (a.ts || 0)); }
+  catch (e) { console.error(e); return toast(traducirError(e)); }
+  const yo = state.user?.email, adm = state.rol === "admin";
+  const fch = t => t ? new Date(t).toLocaleString("es-AR", {day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit"}) : "recién";
+  let borrar = null;
+  const box = await modal({title: "Anotaciones · " + (nombre || email), ok: "Guardar", cancel: "Cerrar",
+    html: `<label>Nueva anotación</label><textarea name="t" rows="3" style="width:100%;box-sizing:border-box;font:inherit;font-size:16px;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px" placeholder="Ej: le molesta la rodilla derecha, bajar intensidad en piernas"></textarea>
+      <div style="margin-top:14px">${lista.length ? lista.map(x => `<div class="card" style="margin:8px 0 0;padding:10px 12px">
+        <div style="white-space:pre-wrap">${esc(x.texto)}</div>
+        <div class="row between" style="margin-top:6px"><span class="small muted">${esc(quienAnot(x))} · ${fch(x.ts)}</span>
+        ${adm || x.autor === yo ? `<button type="button" class="att" data-borrar="${esc(x.id)}">Borrar</button>` : ""}</div></div>`).join("")
+        : `<p class="small muted">Todavía no hay anotaciones.</p>`}</div>`,
+    onOpen: b => b.querySelectorAll("[data-borrar]").forEach(x => x.onclick = () => { borrar = x.dataset.borrar; b.querySelector('[data-m="0"]').click(); })});
+  if (borrar) {
+    if (await modal({title: "Borrar anotación", html: `<p>¿Seguro que querés borrarla?</p>`, ok: "Borrar", danger: true}) && await run(() => state.B.delAnot(borrar), "Anotación borrada")) {}
+    return anotaciones(email, nombre);
+  }
+  if (!box) return;
+  const texto = box.querySelector("[name=t]").value.trim();
+  if (!texto) return toast("Escribí la anotación");
+  if (await run(() => state.B.addAnot({alumno: email, texto, autorNombre: miNombreEquipo()}), "Anotación guardada")) return anotaciones(email, nombre);
 }
 async function marcarAsistencia(id, v) {
   const r = resPorId(id); if (!r) return;
@@ -2139,7 +2177,7 @@ function vAlumnos() {
         ${cupoMes(a) && a.activo !== false ? (() => { const c = cicloDe(a, hoy()); return `<div class="sub">Cupo del ${fmtDM(c.desde)} al ${fmtDM(c.hasta)}: ${enCiclo((state.resRango || []).filter(r => r.email === a.email), c)} de ${cupoMes(a)} turnos</div>`; })() : ""}
         <div class="sub">${nombreMes(ym)}: ${s.usadas} turnos · presente ${s.vino} · ausente ${s.falto}</div>
         ${a.notas ? `<div class="small" style="margin-top:4px">⚠️ ${esc(a.notas)}</div>` : ""}
-        <button class="btn sec sm" style="margin-top:8px" data-a="alTurnos" data-e="${esc(a.email)}">📅 Ver sus turnos</button></div>`; }).join("") : `<div class="empty">No hay alumnos para mostrar</div>`}`;
+        <button class="btn sec sm" style="margin-top:8px" data-a="alTurnos" data-e="${esc(a.email)}">📅 Ver sus turnos</button> <button class="btn sec sm" style="margin-top:8px" data-a="alAnot" data-e="${esc(a.email)}" data-n="${esc(a.nombre || a.email)}">🗒 Anotaciones</button></div>`; }).join("") : `<div class="empty">No hay alumnos para mostrar</div>`}`;
 }
 // Historial de turnos de una alumna: los que vienen y los que ya pasaron, con asistencia y pagos en efectivo
 async function turnosAlumna(email) {
@@ -2743,6 +2781,7 @@ document.addEventListener("click", async e => {
     case "alNuevo": editarAlumno(null); break;
     case "alEdit": editarAlumno(el.dataset.e); break;
     case "alTurnos": turnosAlumna(el.dataset.e); break;
+    case "alAnot": anotaciones(el.dataset.e, el.dataset.n); break;
     case "compSubir": subirComprobante(); break;
     case "pushOn": activarPush(true); break;
     case "pushNo": try { localStorage.setItem("pf_push_no", "1"); } catch (e) {} renderAlumno(); break;
