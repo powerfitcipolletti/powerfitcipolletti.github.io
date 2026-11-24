@@ -188,6 +188,12 @@
   .bar .bt i{display:block;height:100%;background:var(--accent);border-radius:99px}
   .bar .bn{width:34px;text-align:right;font-weight:700}
   .alf{display:inline-block;vertical-align:-2px;margin-left:5px;flex:none}
+  .pick{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:12px;margin-top:6px}
+  .pick button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);color:var(--text);font:inherit;padding:10px 12px;border-radius:0}
+  .pick button:last-child{border-bottom:0}
+  .pick button.sel{background:var(--accent2);color:#fff}
+  .pick .vacio{padding:12px;color:var(--muted);font-size:14px}
+  .seg{display:flex;gap:6px;margin:4px 0 10px}.seg button{flex:1}
   .att{padding:6px 10px;font-size:13px;background:var(--card);color:var(--muted);border:1px solid var(--line)}
   a.att{display:inline-block;border-radius:10px;color:var(--text)}
   .att.yes{background:var(--ok);color:#111;border-color:var(--ok)}
@@ -488,6 +494,10 @@ function demoBackend() {
     async setFin(id, d) { const {id: _, ...x} = d; if (!S.fin) S.fin = finDemo(); S.fin = S.fin.filter(r => r.id !== id); S.fin.push({...clone(x), id}); notify(); },
     async delFin(id) { S.fin = (S.fin || []).filter(r => r.id !== id); notify(); },
     async pagosDesde(f) { return []; },
+    async listFichas() { return [{mail: "carla.demo@gmail.com", nombre: "Carla Ruiz", telefono: "2995553333", fecha: "10/10/2026"}]; },
+    async reservarPruebaAdmin(d) { const sid = slotId(d.fecha, d.hora);
+      S.reservas.push({id: sid + "_prueba_adm" + Math.random().toString(36).slice(2, 10), slot: sid, fecha: d.fecha, hora: d.hora, tipo: "prueba",
+        nombre: d.nombre, mail: d.mail || "", telefono: d.telefono, nota: d.nota, inicio: inicioMs(d.fecha, d.hora)}); notify(); },
     async mpLiberaciones() { return []; }, async liberarPrueba() {}, async bloquearPrueba() {}, async pruebaVigente() { return true; }, async getTransferidos() { return {}; }, async marcarTransferidos() {},
     async listFinTodo() { if (!S.fin) S.fin = finDemo(); return clone(S.fin); },
     async getFicha(email) { return email === "carla.demo@gmail.com" ? {fecha: "10/10/2026", nombre: "Carla Ruiz", dni: "30111222", edad: "42", nacimiento: "02/03/1984", telefono: "2995553333", altura: "165", peso: "68", actividad: "No", objetivo: "Tonificar y bajar de peso", condiciones: "Hipertensión", detalle: "Controlada con medicación", medicacion: "Sí", cualMedicacion: "Enalapril", lesion: "No", otra: "", imagen: "Sí", consentimiento: "Sí", firma: "Carla Ruiz", hora: "18:42", firmaImg: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABkAQMAAAAGz5+DAAAABlBMVEX///8LGjovth/2AAACe0lEQVR42u2WsW7UQBCGv7VPZ1fxlVdEstNRUh5SkrsCUfMI4Q1SpkBikaKkocgr8CCgTaBIg5RHWEVIUC4oxQK+M4Xt3fU5FyxEQXFT2eN///1ndmbWsLWtbW1r/7El9/iiv2aL5b9kEwoQf2I7BGAsH4aJy6oYoK1xpIt7vIeB51peABR9WHbplYzUAmBn0odNOPaeEoBf96RgjvVHJfQMmJ302d5xtn6idtSDiZK3XlzFZ2Ch+mxfMS7+HS4AzG0PFmnuApf6DkjRg41gVfhAUwBt5DpsqsClqUA8AYEFRKXXDttl5Jj8CwgZK0gqG7CtgNMWJmECERQwYxywnYSnasgqSYzQiJIsUGiBvK0jTfZKkoAh1sTGV5gBt0xoolwxBkuiakG1tsgAtslvpFkZSOGUqYI9H4IGyqC+bMEKFIWEJn0RjBSOHBSUMIFbDgB75GpC1hG6AhGWKeRYCGJIXLjADsBLZpDVCNtumrRprQu5XWTf3ODyHrWyPgZz4YoF8FwBfGg33fXNlev9uuiPIK6XZ936zAHmVQmQSw2i7p1Ed2CZBMq5BciVcuKF6XS9Bbi7uQYwe37YVGkHVi4A860+s6nyX867M6QA0eiwY2C3acGLTrULC6LxJHNg/h4fg2OrToOXGwkHL+rnn7udUPchbqfvuULYzPV3qO0W3EBICyJrGwmFWstv2yDikyVRSTCLPZuRdSMDZM84Ue3sqjqhJrquIgCbVdWG2VtOPIw7fmyALdOgc5cy3TTJzwgy9Hrj7TJnNuyCfLzxW7BpKRdDYIRj/wGYYBAsGgRbPdWD2B6pQbdyNez2Xj3wmxA8L6+2P2FbW7ff1yWxn8fiRjwAAAAASUVORK5CYII="} : null; }
@@ -604,6 +614,21 @@ async function firebaseBackend() {
         ? deleteDoc(doc(db, "pruebasMail", m)) : setDoc(doc(db, "pruebasMail", m), {creado: serverTimestamp()}, {merge: true})));
     },
     async bloquearPrueba(mail) { const m = String(mail || "").trim().toLowerCase(); if (m) await setDoc(doc(db, "pruebasMail", m), {creado: serverTimestamp()}, {merge: true}); },
+    // Clase de prueba cargada por una dueña (para quien ya firmó la ficha y no pudo reservar sola): sin controles de cupo ni de prueba previa
+    async reservarPruebaAdmin(d) {
+      const sid = slotId(d.fecha, d.hora), tRef = doc(db, "turnos", sid);
+      const rRef = doc(db, "reservas", sid + "_prueba_adm" + Math.random().toString(36).slice(2, 10));
+      await runTransaction(db, async tx => {
+        const t = await tx.get(tRef), n = t.exists() ? (t.data().n || 0) : 0;
+        if (t.exists()) tx.update(tRef, {n: n + 1}); else tx.set(tRef, {n: 1, fecha: d.fecha, hora: d.hora});
+        tx.set(rRef, {slot: sid, fecha: d.fecha, hora: d.hora, tipo: "prueba", nombre: d.nombre, mail: d.mail || "", telefono: d.telefono || "", nota: d.nota || "",
+          inicio: Timestamp.fromMillis(inicioMs(d.fecha, d.hora)), creado: serverTimestamp(), cargadaPor: me?.email || ""});
+      });
+      if (d.mail) await setDoc(doc(db, "pruebasMail", d.mail), {creado: serverTimestamp()}, {merge: true}).catch(e => console.warn(e));
+    },
+    // Todas las fichas firmadas (para buscar a quien viene a la clase de prueba)
+    async listFichas() { try { return (await getDocs(collection(db, "fichas"))).docs.map(x => { const f = x.data(); return {mail: x.id, nombre: f.nombre || "", telefono: f.telefono || "", fecha: f.fecha || ""}; }); }
+      catch (e) { console.warn(e); return null; } },
     // Solo las dueñas pueden leer la lista de profes: si la lectura funciona, es dueña
     async isAdmin() { try { await getDocs(query(collection(db, "profes"), limit(1))); return true; } catch (e) { return false; } },
     async isProfe() { try { return (await getDoc(doc(db, "profes", me.email))).exists(); } catch (e) { return false; } },
@@ -2261,13 +2286,54 @@ function pagosDeAlumnoHTML(al) {
 async function agAgregar(h, fecha) {
   const f = fecha || state.agFecha;
   const ya = resPool().filter(r => r.fecha === f && r.hora === h).map(r => r.email);
-  const opts = state.alumnos.filter(a => a.activo !== false && !ya.includes(a.email));
-  if (!opts.length) return toast("No hay alumnos activos para agregar");
-  const box = await modal({title: `Agregar a las ${h}`, html: `<p class="sub">${fmtLargo(f)}</p>
-    <label>Alumno</label><select name="al">${opts.map(a => `<option value="${esc(a.email)}">${esc(a.nombre || a.email)}</option>`).join("")}</select>
-    <label>Comentario (opcional)</label><input name="nota" placeholder="Ej: abona en efectivo">`, ok: "Agregar"});
+  const opts = state.alumnos.filter(a => a.activo !== false && !ya.includes(a.email)).sort((a, b) => sinTildes(a.nombre || a.email).localeCompare(sinTildes(b.nombre || b.email)));
+  const adm = state.rol === "admin";
+  let modo = "al", sel = "", fichas = null;
+  const box = await modal({title: `Agregar a las ${h}`, ok: "Agregar", html: `<p class="sub">${fmtLargo(f)}</p>
+    ${adm ? `<div class="seg"><button type="button" class="btn sm" data-modo="al">Alumna</button><button type="button" class="btn sec sm" data-modo="pr">Clase de prueba</button></div>` : ""}
+    <input name="q" type="search" autocomplete="off" placeholder="Escribí el nombre, mail o teléfono…" style="font-size:16px">
+    <div class="pick" id="pick"></div>
+    <div id="prDatos" style="display:none">
+      <p class="small muted" style="margin-top:8px">Elegí a la persona de la lista de fichas firmadas, o cargá los datos a mano.</p>
+      <label>Nombre y apellido</label><input name="pnom">
+      <label>Mail</label><input name="pmail" type="email" inputmode="email">
+      <label>WhatsApp</label><input name="ptel" inputmode="tel"></div>
+    <label>Comentario (opcional)</label><input name="nota" placeholder="Ej: abona en efectivo">`,
+    onOpen: b => {
+      const q = b.querySelector("[name=q]"), pick = b.querySelector("#pick"), datos = b.querySelector("#prDatos");
+      const pinta = () => {
+        const t = sinTildes(q.value).trim(), tn = q.value.replace(/\D/g, "");
+        const coincide = (...xs) => !t || xs.some(x => sinTildes(x).includes(t)) || (tn.length >= 3 && xs.some(x => String(x || "").replace(/\D/g, "").includes(tn)));
+        let filas;
+        if (modo === "al") filas = opts.filter(a => coincide(a.nombre, a.email, a.telefono)).map(a => ({v: a.email, t: a.nombre || a.email, s: a.nombre ? a.email : ""}));
+        else if (fichas === undefined) { pick.innerHTML = `<div class="vacio">Cargando fichas…</div>`; return; }
+        else if (fichas === null) { pick.innerHTML = `<div class="vacio">No se pudo leer la lista de fichas. Cargá los datos a mano abajo.</div>`; return; }
+        else filas = fichas.filter(x => coincide(x.nombre, x.mail, x.telefono)).map(x => ({v: x.mail, t: x.nombre || x.mail, s: [x.mail, x.fecha ? "ficha " + x.fecha : ""].filter(Boolean).join(" · ")}));
+        pick.innerHTML = filas.length ? filas.slice(0, 60).map(x => `<button type="button" data-v="${esc(x.v)}" class="${x.v === sel ? "sel" : ""}">${esc(x.t)}${x.s ? `<div class="small" style="opacity:.75">${esc(x.s)}</div>` : ""}</button>`).join("")
+          : `<div class="vacio">${t ? "No hay nadie con ese nombre" : modo === "al" ? "No hay alumnos activos para agregar" : "No hay fichas"}</div>`;
+      };
+      pick.onclick = e => { const x = e.target.closest("[data-v]"); if (!x) return; sel = x.dataset.v;
+        if (modo === "pr") { const fi = (fichas || []).find(y => y.mail === sel);
+          if (fi) { b.querySelector("[name=pnom]").value = fi.nombre; b.querySelector("[name=pmail]").value = fi.mail; b.querySelector("[name=ptel]").value = fi.telefono; } }
+        pinta(); };
+      q.oninput = pinta;
+      b.querySelectorAll("[data-modo]").forEach(x => x.onclick = async () => {
+        modo = x.dataset.modo; sel = "";
+        b.querySelectorAll("[data-modo]").forEach(y => y.className = "btn sm" + (y === x ? "" : " sec"));
+        datos.style.display = modo === "pr" ? "" : "none";
+        if (modo === "pr" && fichas === null && !state._fichasL) { fichas = undefined; pinta();
+          const l = await state.B.listFichas().catch(() => null);
+          const alum = new Set(state.alumnos.map(a => a.email));
+          fichas = l ? l.filter(y => !alum.has(y.mail)).sort((a, c) => sinTildes(a.nombre).localeCompare(sinTildes(c.nombre))) : null; state._fichasL = fichas; }
+        else if (modo === "pr" && state._fichasL) fichas = state._fichasL;
+        pinta(); q.focus(); });
+      pinta();
+    }});
   if (!box) return;
-  const email = box.querySelector("[name=al]").value, nota = box.querySelector("[name=nota]").value.trim();
+  const nota = box.querySelector("[name=nota]").value.trim();
+  if (modo === "pr") return agregarPruebaAdmin(f, h, box, nota, ya.length);
+  const email = sel;
+  if (!email) return toast("Elegí a la alumna de la lista");
   const avisos = [];
   if (ya.length >= state.cfg.capacidad) avisos.push(`El turno ya tiene ${ya.length}/${state.cfg.capacidad} personas`);
   const mis = (await state.B.reservasRango(addDays(f, -1), addDays(f, 1))).filter(r => r.email === email);
@@ -2284,6 +2350,25 @@ async function agAgregar(h, fecha) {
     if (n >= cupo) avisos.push(`Ya usó sus ${cupo} turnos del ${fmtDM(c.desde)} al ${fmtDM(c.hasta)} (${planNombre(al.plan)})`); }
   if (avisos.length && !await modal({title: "Atención", html: `<p>${avisos.map(esc).join("<br>")}</p><p class="sub" style="margin-top:8px">Podés agregarlo igual.</p>`, ok: "Agregar igual"})) return;
   if (await run(async () => { await state.B.reservar(email, f, h, {admin: true}); if (nota) await state.B.setNotaRes(slotId(f, h) + "_" + email, nota); }, "Agregado")) { await cargarAdmin(); renderAdmin(); }
+}
+// Clase de prueba cargada por las dueñas (por ejemplo, alguien que firmó la ficha pero la app no le dejó reservar)
+async function agregarPruebaAdmin(f, h, box, nota, ocupados) {
+  const g = n => box.querySelector(`[name=${n}]`).value.trim();
+  const d = {fecha: f, hora: h, nombre: g("pnom"), mail: g("pmail").toLowerCase(), telefono: g("ptel").replace(/[^\d+]/g, ""), nota: [nota, "Cargada por las dueñas"].filter(Boolean).join(" · ")};
+  if (d.nombre.length < 2) return toast("Falta el nombre");
+  if (d.mail && !esMailOk(d.mail)) return toast("Revisá el mail");
+  if (!d.mail && d.telefono.replace(/\D/g, "").length < 8) return toast("Poné el mail o el WhatsApp");
+  const avisos = [];
+  if (ocupados >= state.cfg.capacidad) avisos.push(`El turno ya tiene ${ocupados}/${state.cfg.capacidad} personas`);
+  if (d.mail && alumnoDe(d.mail)) avisos.push(`${d.mail} ya está registrada como alumna`);
+  const previa = (state.pruebas || []).concat(state.pruebasTodas || []).find(r => r.mail && r.mail === d.mail);
+  if (previa) avisos.push(`Ya tiene una clase de prueba cargada (${fmtLargo(previa.fecha)} ${previa.hora})`);
+  if (d.mail && !(await fichaDe(d.mail).catch(() => null))) avisos.push("No encontramos ficha firmada con ese mail");
+  if (avisos.length && !await modal({title: "Atención", html: `<p>${avisos.map(esc).join("<br>")}</p><p class="sub" style="margin-top:8px">Podés agregarla igual.</p>`, ok: "Agregar igual"})) return;
+  if (await run(() => state.B.reservarPruebaAdmin(d), "Clase de prueba agregada")) {
+    if (d.mail) enviarConfirmacion(d);
+    await cargarAdmin(); renderAdmin();
+  }
 }
 async function agMover(id) {
   const r = resPorId(id); if (!r) return;
