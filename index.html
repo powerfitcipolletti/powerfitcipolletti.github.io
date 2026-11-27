@@ -1292,11 +1292,15 @@ async function aprobarComprobante(id) {
   if (!a) return toast("No encuentro la alumna de este comprobante en Alumnos");
   const h = hoy(), meses0 = PAGOS.find(x => x.id === a.pago)?.meses || 1;
   // el plan arranca el día que pagó (fecha del comprobante), no desde el vencimiento anterior
-  const ini0 = c.fecha && c.fecha <= h ? c.fecha : h;
+  let ini0 = c.fecha && c.fecha <= h ? c.fecha : h;
+  // Si paga el mismo día que le vence el plan, ese día (y su turno) es del plan anterior: el nuevo arranca al día siguiente
+  const pagoAlVencer = a.vence && ini0 === a.vence;
+  if (pagoAlVencer) ini0 = addDays(a.vence, 1);
   const box = await modal({title: "Aprobar y renovar", ok: "Aprobar", html: `<p><b>${esc(a.nombre || a.email)}</b>${c.monto ? " · pagó " + plata(c.monto) : ""}</p>
     <div class="grid2"><div><label>Nuevo inicio</label><input type="date" name="i" value="${ini0}"></div>
     <div><label>Meses que paga</label><select name="m">${[1, 2, 3].map(n => `<option value="${n}" ${n === meses0 ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>
     <p class="sub" style="margin-top:10px">Vence: <b id="cVence"></b></p>
+    ${pagoAlVencer ? `<p class="small muted" style="margin-top:6px">Pagó el día que le vencía el plan (${fmtFecha(a.vence)}): ese día cuenta para el plan anterior, así que el nuevo arranca el ${fmtFecha(ini0)}.</p>` : ""}
     ${a.mpSuscripcion ? `<div class="note" style="margin-top:10px">⚠️ Esta alumna paga con débito automático de Mercado Pago: el plan se renueva solo con cada cobro. Si este comprobante es de ese mismo débito, no hace falta aprobarlo (rechazalo con el motivo "ya se acreditó por débito").</div>` : ""}
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" name="av" checked style="width:20px;height:20px"> Avisarle por mail que el pago está aprobado</label>`,
     onOpen: b => { const i = b.querySelector("[name=i]"), m = b.querySelector("[name=m]"), v = b.querySelector("#cVence");
@@ -1717,7 +1721,7 @@ async function registrarPago(id) {
       <label>Nota (opcional)</label><input name="nota" value="${esc(p.nota || "")}">
       ${!esPrueba(r) && alumnoDe(r.email) && !r.pago ? `<label class="chk" style="margin-top:12px"><input type="checkbox" name="pack"> Es el pago de un pack nuevo: arranca con esta clase</label>
       <div id="packOp" style="display:none"><label>Plan</label><select name="plan">${PLANES.map(x => `<option value="${x.id}" ${(alumnoDe(r.email).plan || "2x") === x.id ? "selected" : ""}>${x.nombre} (${x.cupoMes} clases)</option>`).join("")}</select>
-      <p class="small muted" style="margin-top:6px">El pack va del ${fmtDM(r.fecha)} al ${fmtDM(addMonths(r.fecha, 1))}. Esta clase cuenta como la 1.</p></div>` : ""}
+      <p class="small muted" style="margin-top:6px">${alumnoDe(r.email).vence === r.fecha ? `Hoy le vence el plan anterior, así que esta clase cuenta para ese plan: el pack nuevo va del ${fmtDM(addDays(r.fecha, 1))} al ${fmtDM(addMonths(addDays(r.fecha, 1), 1))}.` : `El pack va del ${fmtDM(r.fecha)} al ${fmtDM(addMonths(r.fecha, 1))}. Esta clase cuenta como la 1.`}</p></div>` : ""}
       ${r.pago ? `<p class="small muted" style="margin-top:8px">Cargado por ${esc(nombreEquipo(p.por))}</p><button class="btn bad sm" style="margin-top:10px" data-quitar="1">Quitar pago</button>` : ""}`,
     onOpen: b => { const ck = b.querySelector("[name=pack]"); if (ck) ck.onchange = () => { b.querySelector("#packOp").style.display = ck.checked ? "" : "none"; };
       // Al elegir un pack se completa el monto y, si corresponde, el plan del pack nuevo
@@ -1735,7 +1739,8 @@ async function registrarPago(id) {
   const ckP = box.querySelector("[name=pack]"), al = alumnoDe(r.email);
   const pack = !quitar && ckP && ckP.checked && al ? {plan: box.querySelector("[name=plan]").value} : null;
   // packPend: el programa de avisos activa el plan (también si lo carga una profe) y le manda el mail a la alumna
-  if (pack) { pack.inicio = r.fecha; pack.vence = addMonths(r.fecha, 1); v.pack = pack.plan; v.packPend = true; }
+  // si es el día que le vence el plan anterior, esta clase es de ese plan y el pack nuevo arranca al día siguiente
+  if (pack) { pack.inicio = al.vence === r.fecha ? addDays(r.fecha, 1) : r.fecha; pack.vence = addMonths(pack.inicio, 1); v.pack = pack.plan; v.packInicio = pack.inicio; v.packVence = pack.vence; v.packPend = true; }
   if (await run(async () => { await state.B.setPago(r, v);
       if (pack && state.rol === "admin") await state.B.saveAlumno({...al, plan: pack.plan, pago: "otro", inicio: pack.inicio, vence: pack.vence, activo: true, cuposHastaVence: false}); },
     pack ? (state.rol === "admin" ? "Pago registrado y plan activado hasta el " + fmtDM(pack.vence) + ". Le llega el mail en unos minutos" : "Pago registrado. En unos minutos se le activa el plan hasta el " + fmtDM(pack.vence) + " y le llega el mail") : quitar ? "Pago quitado" : "Pago registrado")) {
@@ -1977,7 +1982,7 @@ function fechaEscrita(t) {
   if (yy < 2000 || yy > 2100 || f.getUTCMonth() !== mm - 1 || f.getUTCDate() !== dd) return "";
   return f.toISOString().slice(0, 10);
 }
-async function finEditar(id, tipo, y) {
+async function finEditar(id, tipo, y, desdeFicha) {
   const x = id ? (finCache[y] || []).find(r => r.id === id) : null;
   tipo = x ? x.tipo : tipo;
   const ing = tipo === "ingreso", all = Object.values(finCache).flat();
@@ -1998,10 +2003,16 @@ async function finEditar(id, tipo, y) {
   if (!box) return;
   if (box.dataset.borrar === "1") {
     delete box.dataset.borrar;
-    if (!(await modal({title: "¿Borrar?", html: `<p>${esc(x.nombre || "")} · ${plata(Number(x.monto) || 0)} · ${fmtFecha(x.fecha)}</p>`, ok: "Borrar", danger: true}))) return;
+    const efRes = x.origen === "efectivo" && String(x.id).startsWith("ef_");
+    if (!(await modal({title: "¿Borrar?", html: `<p>${esc(x.nombre || "")} · ${plata(Number(x.monto) || 0)} · ${fmtFecha(x.fecha)}</p>
+      ${efRes ? `<p class="small muted" style="margin-top:8px">También se quita el 💵 del turno en la agenda.</p>` : ""}
+      ${x.tipo === "ingreso" && x.alumnoEmail ? `<p class="small muted" style="margin-top:8px">El plan y el vencimiento de la alumna no cambian: si hace falta, corregilos en su ficha.</p>` : ""}`, ok: "Borrar", danger: true}))) return;
     // los débitos de MP se marcan como ignorados (si no, se volverían a sumar solos)
-    const ok = await run(() => x.origen === "mp" ? state.B.setFin(x.id, {...x, ignorado: true}) : state.B.delFin(x.id), "Borrado");
-    if (ok) { if (x.origen === "mp") x.ignorado = true; else finCache[y] = finCache[y].filter(r => r.id !== x.id); renderAdmin(); }
+    const ok = await run(async () => { if (x.origen === "mp") await state.B.setFin(x.id, {...x, ignorado: true}); else await state.B.delFin(x.id);
+      if (efRes) await state.B.setPago({id: x.id.slice(3)}, null).catch(e => console.warn("agenda", e)); }, "Borrado");
+    if (ok) { if (x.origen === "mp") x.ignorado = true; else finCache[y] = finCache[y].filter(r => r.id !== x.id);
+      if (efRes) { const r = resPorId(x.id.slice(3)); if (r) delete r.pago; }
+      if (!desdeFicha) renderAdmin(); }
     return;
   }
   const v = n => (box.querySelector(`[name=${n}]`)?.value || "").trim();
@@ -2015,10 +2026,13 @@ async function finEditar(id, tipo, y) {
   if (!x && ing && !(await confirmarSinDuplicar({nombre: d.nombre, fecha: d.fecha, monto: d.monto}))) return;
   d.por = state.user.email; d.editado = Date.now();
   const nid = x ? x.id : (tipo === "gasto" ? "g_" : "i_") + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  if (await run(() => state.B.setFin(nid, d), "Guardado")) {
+  // Efectivo cargado en la agenda: el monto del turno se corrige junto con Finanzas
+  const efR = x && x.origen === "efectivo" && String(x.id).startsWith("ef_") && Number(x.monto) !== d.monto ? resPorId(x.id.slice(3)) : null;
+  if (await run(async () => { await state.B.setFin(nid, d);
+      if (efR?.pago) { const pg = {...efR.pago, monto: d.monto}; await state.B.setPago(efR, pg).catch(e => console.warn("agenda", e)); efR.pago = pg; } }, "Guardado")) {
     Object.keys(finCache).forEach(k => finCache[k] = finCache[k].filter(r => r.id !== nid));
     const ny = d.fecha.slice(0, 4); await cargarFin(ny); if (!finCache[ny].some(r => r.id === nid)) finCache[ny].push({...d, id: nid});
-    state.finMes = d.fecha.slice(0, 7); renderAdmin();
+    if (!desdeFicha) { state.finMes = d.fecha.slice(0, 7); renderAdmin(); }
   }
 }
 
@@ -2188,7 +2202,9 @@ async function turnosAlumna(email) {
   // Número de clase dentro de su ciclo de 30 días (ej. 3/8), como en SigueFit
   const nro = {};
   if (cupo) { const orden = [...rs].sort((x, y) => x.inicio - y.inicio), cuenta = {};
-    for (const r of orden) { const c = cicloDe(a, r.fecha); cuenta[c.desde] = (cuenta[c.desde] || 0) + 1; nro[r.id] = `${cuenta[c.desde]}/${cupo}`; } }
+    // Solo se numeran los turnos que caen dentro de su ciclo: los de un plan anterior no siguen la cuenta (antes salían 9/8, 10/8…)
+    for (const r of orden) { const c = cicloDe(a, r.fecha); if (r.fecha < c.desde || r.fecha > c.hasta) continue;
+      cuenta[c.desde] = (cuenta[c.desde] || 0) + 1; nro[r.id] = `${cuenta[c.desde]}/${cupo}`; } }
   const prox = rs.filter(r => r.inicio >= ahora).sort((x, y) => x.inicio - y.inicio);
   const pas = rs.filter(r => r.inicio < ahora).sort((x, y) => y.inicio - x.inicio);
   const fila = (r, pasado) => {
@@ -2265,7 +2281,10 @@ async function editarAlumno(email, prefill) {
       sug.onclick = ev => { const t = ev.target.closest("[data-sug]"); if (t) { ev.preventDefault(); pm.value = t.dataset.sug; } };
       pintaSug(); plan.addEventListener("change", pintaSug); pago.addEventListener("change", pintaSug);
       const quien = a || prefill || {}, pa = b.querySelector("#pagosAl");
-      if (pa && (quien.email || quien.nombre)) cargarFinTodo().then(() => { pa.innerHTML = pagosDeAlumnoHTML(quien); }).catch(() => { pa.innerHTML = ""; });
+      if (pa && (quien.email || quien.nombre)) cargarFinTodo().then(() => { pa.innerHTML = pagosDeAlumnoHTML(quien, !!a); }).catch(() => { pa.innerHTML = ""; });
+      // Tocar un pago: se abre para modificarlo o borrarlo y después vuelve a la ficha de la alumna
+      if (pa && a) pa.onclick = async ev => { const f = ev.target.closest("[data-pg]"); if (!f) return; ev.preventDefault(); $modal.classList.remove("on");
+        await finEditar(f.dataset.pg, null, f.dataset.y, true); editarAlumno(a.email); };
       const fm = b.querySelector("#fichaMed"), mailF = (a || prefill || {}).email;
       if (fm && mailF) fichaDe(mailF).then(f => { fm.innerHTML = fichaHTML(f, mailF); });
       const del = b.querySelector("[data-del]");
@@ -2284,6 +2303,13 @@ async function editarAlumno(email, prefill) {
   if (!a && alumnoDe(nuevo.email)) return toast("Ya existe un alumno con ese mail");
   const pMonto = Number(g("pagoMonto").value), pFecha = fechaEscrita(g("pagoFecha").value), pMedio = g("pagoMedio").value.trim() || "Transferencia";
   if (pMonto > 0 && !pFecha) return toast("Revisá la fecha del pago: escribila como 15/11/2026");
+  if (a && a.vence && nuevo.inicio && nuevo.inicio === a.vence && nuevo.inicio !== a.inicio) {
+    const sig = addDays(a.vence, 1), g2 = PAGOS.find(x => x.id === nuevo.pago);
+    const r = await modal({title: "¿Desde qué día arranca el plan nuevo?", ok: "Desde el " + fmtDM(sig), cancel: "Dejar el " + fmtDM(nuevo.inicio),
+      html: `<p>El ${fmtFecha(a.vence)} es el día que le vencía el plan anterior, así que ese día (y su turno, si tiene) cuenta para el plan viejo.</p>
+        <p class="small muted" style="margin-top:8px">Si arranca el ${fmtFecha(sig)}, el vencimiento pasa a ser el ${fmtFecha(addDays(nuevo.vence || addMonths(nuevo.inicio, g2?.meses || 1), 1))}.</p>`});
+    if (r) { nuevo.vence = addDays(nuevo.vence || addMonths(nuevo.inicio, g2?.meses || 1), 1); nuevo.inicio = sig; }
+  }
   const cargarPago = pMonto > 0 && await confirmarSinDuplicar({nombre: nuevo.nombre, email: nuevo.email, fecha: pFecha, monto: pMonto});
   if (await run(() => state.B.saveAlumno(nuevo), "Guardado")) {
     if (cargarPago) {
@@ -2311,14 +2337,14 @@ async function confirmarSinDuplicar({nombre, email, fecha, monto, excluirId}) {
      <p class="small muted" style="margin-top:8px">Vas a cargar ${plata(monto)} el ${fmtFecha(fecha)}. Si es el mismo pago, tocá "No cargar".</p>`}));
 }
 // Pagos de una alumna que figuran en Finanzas (por mail, o por nombre en lo que vino del Excel)
-function pagosDeAlumnoHTML(al) {
+function pagosDeAlumnoHTML(al, editable) {
   const nom = sinTildes(al.nombre || "").trim(), mail = String(al.email || "").toLowerCase();
   const xs = Object.values(finCache).flat().filter(x => x.tipo === "ingreso" && !x.ignorado
     && ((mail && x.alumnoEmail === mail) || (nom.length > 3 && sinTildes(x.nombre || "").includes(nom))))
     .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   if (!xs.length) return `<span class="muted">Todavía no tiene pagos registrados en Finanzas.</span>`;
-  return `<div class="muted" style="margin-bottom:4px">Pagos registrados en Finanzas:</div>` + xs.slice(0, 8).map(x =>
-    `<div class="row between" style="padding:3px 0;border-top:1px solid var(--line)"><span>${fmtFecha(x.fecha)} · ${esc(capi(x.medio))}</span><b>${plata(Number(x.monto) || 0)}</b></div>`).join("")
+  return `<div class="muted" style="margin-bottom:4px">Pagos registrados en Finanzas${editable ? " (tocá uno para modificarlo o borrarlo)" : ""}:</div>` + xs.slice(0, 8).map(x =>
+    `<div class="row between" ${editable ? `data-pg="${esc(x.id)}" data-y="${esc(String(x.fecha || "").slice(0, 4))}" style="padding:6px 0;border-top:1px solid var(--line);cursor:pointer"` : `style="padding:3px 0;border-top:1px solid var(--line)"`}><span>${fmtFecha(x.fecha)} · ${esc(capi(x.medio))}</span><b>${plata(Number(x.monto) || 0)}${editable ? ` <span class="muted" style="font-weight:400">✏️</span>` : ""}</b></div>`).join("")
     + (xs.length > 8 ? `<div class="muted">y ${xs.length - 8} más (buscalos en Finanzas)</div>` : "");
 }
 async function agAgregar(h, fecha) {
