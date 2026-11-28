@@ -336,6 +336,18 @@ function cicloDe(a, f) {
   const hasta = ciclos && n === ciclos - 1 ? a.vence : addDays(desde, 29);
   return {desde, hasta};
 }
+// Plan que cubría una fecha: el actual o uno anterior guardado al renovar (así un turno del pack viejo no figura "Sin pack")
+function planDeFecha(a, f) {
+  if (!a || !f || !a.inicio || f >= a.inicio) return a;
+  const ant = (a.anteriores || []).find(x => x.inicio && x.vence && f >= x.inicio && f <= x.vence);
+  return ant ? {...a, plan: ant.plan || a.plan, pago: ant.pago || a.pago, inicio: ant.inicio, vence: ant.vence} : a;
+}
+// Al cambiar el inicio del plan (renovación), se guarda el período anterior en la ficha
+function conAnterior(nuevo, viejo) {
+  if (!viejo || !viejo.inicio || !viejo.vence || !nuevo.inicio || nuevo.inicio <= viejo.inicio) return nuevo;
+  const prev = (viejo.anteriores || []).filter(x => x.inicio !== viejo.inicio);
+  return {...nuevo, anteriores: [{inicio: viejo.inicio, vence: viejo.vence, plan: viejo.plan || "", pago: viejo.pago || ""}, ...prev].slice(0, 6)};
+}
 const enCiclo = (rs, c) => rs.filter(r => r.fecha >= c.desde && r.fecha <= c.hasta).length;
 const plata = n => "$" + Math.round(n).toLocaleString("es-AR");
 // Total que paga en el período según plan y forma de pago (null si no se puede calcular, ej. Pack Dra.)
@@ -472,7 +484,7 @@ function demoBackend() {
     async setNotaRes(id, nota, campo = "nota") { const x = S.reservas.find(y => y.id === id); if (x) { if (nota) x[campo] = nota; else delete x[campo]; } notify(); },
     async getAlumno(email) { const a = S.alumnos.find(a => a.email === email); return a ? clone(a) : null; },
     async listAlumnos() { return clone(S.alumnos); },
-    async saveAlumno(a) { S.alumnos = S.alumnos.filter(x => x.email !== a.email); S.alumnos.push(clone(a)); notify(); },
+    async saveAlumno(a) { a = conAnterior(a, S.alumnos.find(x => x.email === a.email)); S.alumnos = S.alumnos.filter(x => x.email !== a.email); S.alumnos.push(clone(a)); notify(); },
     async deleteAlumno(email) { S.alumnos = S.alumnos.filter(x => x.email !== email); notify(); },
     async listMp() { return clone(S.mp || []); },
     async subirComprobante(c) { S.comprobantes = S.comprobantes || []; S.comprobantes.push({...clone(c), id: "c" + Date.now(), email: me.email, estado: "pendiente"}); notify(); },
@@ -753,7 +765,7 @@ async function firebaseBackend() {
     async getAlumno(email) { const s = await getDoc(doc(db, "alumnos", email)); return s.exists() ? s.data() : null; },
     async listAlumnos() { return (await getDocs(collection(db, "alumnos"))).docs.map(d => d.data()); },
     // merge: no borra los datos que agrega el programa de avisos (débito de Mercado Pago, avisos enviados)
-    async saveAlumno(a) { await setDoc(doc(db, "alumnos", a.email), a, {merge: true}); },
+    async saveAlumno(a) { a = conAnterior(a, (state.alumnos || []).find(x => x.email === a.email)); await setDoc(doc(db, "alumnos", a.email), a, {merge: true}); },
     async deleteAlumno(email) { await deleteDoc(doc(db, "alumnos", email)); },
     // Débitos de Mercado Pago que trae el programa de avisos (colección "mp")
     async listMp() { try { return (await getDocs(collection(db, "mp"))).docs.map(d => ({id: d.id, ...d.data()})); } catch (e) { console.warn(e); return []; } },
@@ -1583,12 +1595,12 @@ function personaFila(r) {
   const ini = nom.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase() || "?";
   let sub = "", sinPack = false;
   if (prueba) { sub = `<span class="badge prueba">PRUEBA</span>` + alertaPruebaRep(r); if (r.comentario) sub += ` · ${esc(r.comentario)}`; }
-  else if (a) { const cupo = cupoMes(a), c = cicloDe(a, r.fecha);
+  else if (a) { const ap = planDeFecha(a, r.fecha), cupo = cupoMes(ap), c = cicloDe(ap, r.fecha);
     const mias = (state.resRango || []).filter(x => x.email === r.email && x.fecha >= c.desde && x.fecha <= c.hasta).sort((x, y) => x.inicio - y.inicio);
     const n = mias.findIndex(x => x.id === r.id) + 1;
-    const v = (PLANES.find(p => p.id === a.plan) || {}).veces;
+    const v = (PLANES.find(p => p.id === ap.plan) || {}).veces;
     // Turno fuera del pack (vencido, antes del inicio o pasado del total): se marca como en SigueFit
-    sinPack = !libreAl(a) && (!a.inicio || !a.vence || r.fecha > a.vence || r.fecha < a.inicio || (cupo > 0 && n > cupo));
+    sinPack = !libreAl(a) && (!ap.inicio || !ap.vence || r.fecha > ap.vence || r.fecha < ap.inicio || (cupo > 0 && n > cupo));
     sub = sinPack ? `<span style="color:var(--warn)">Sin pack</span>` : (cupo && n ? `${n}/${cupo} · ` : "") + (v ? `${v} ${v === 1 ? "vez" : "veces"}/sem` : "");
     if (r.nota) sub += ` · ${esc(r.nota)}`; }
   const est = (sinPack ? "🚫" : "") + (r.asistencia === true ? "✅" : r.asistencia === false ? "❌" : "") + (r.pago ? "💵" : "");
@@ -2203,8 +2215,8 @@ async function turnosAlumna(email) {
   const nro = {};
   if (cupo) { const orden = [...rs].sort((x, y) => x.inicio - y.inicio), cuenta = {};
     // Solo se numeran los turnos que caen dentro de su ciclo: los de un plan anterior no siguen la cuenta (antes salían 9/8, 10/8…)
-    for (const r of orden) { const c = cicloDe(a, r.fecha); if (r.fecha < c.desde || r.fecha > c.hasta) continue;
-      cuenta[c.desde] = (cuenta[c.desde] || 0) + 1; nro[r.id] = `${cuenta[c.desde]}/${cupo}`; } }
+    for (const r of orden) { const ap = planDeFecha(a, r.fecha), c = cicloDe(ap, r.fecha); if (r.fecha < c.desde || r.fecha > c.hasta) continue;
+      cuenta[c.desde] = (cuenta[c.desde] || 0) + 1; nro[r.id] = `${cuenta[c.desde]}/${cupoMes(ap) || cupo}`; } }
   const prox = rs.filter(r => r.inicio >= ahora).sort((x, y) => x.inicio - y.inicio);
   const pas = rs.filter(r => r.inicio < ahora).sort((x, y) => y.inicio - x.inicio);
   const fila = (r, pasado) => {
